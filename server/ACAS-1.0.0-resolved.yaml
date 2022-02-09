@@ -1,0 +1,451 @@
+---
+swagger: "2.0"
+info:
+  description: This is a simple API for Advanced Cybersecurity Analytics Service
+  version: 1.0.0
+  title: Advanced Cybersecurity Analytics Service API
+  contact:
+    email: monika.rakoczy@montimage.com
+host: virtserver.swaggerhub.com
+basePath: /trzytematyczna/AdvancedCybersecurityAnalyticsService/1.0.0
+tags:
+- name: developers
+  description: Operations available to regular developers
+schemes:
+- https
+paths:
+  /training-results:
+    get:
+      tags:
+      - developers
+      summary: Get test dataset results obtained during creation of new model
+      description: |
+        Returns .csv file of predictions, metrics or confusion matrix of test dataset obtained during creation of new model based on its id.
+      operationId: get_training_results
+      consumes:
+      - integer
+      produces:
+      - text/csv
+      parameters:
+      - name: id
+        in: query
+        description: id of new model that was trained with API
+        required: false
+        type: integer
+        minimum: 1
+        format: int64
+      - name: what
+        in: query
+        required: false
+        type: string
+        enum:
+        - conf
+        - preds
+        - stats
+      responses:
+        "200":
+          description: .csv file with result (prediction/stats/confustion matrix)
+          schema:
+            type: file
+        "400":
+          description: bad input parameter
+  /model:
+    get:
+      tags:
+      - developers
+      summary: Get new trained model
+      description: |
+        By passing in the appropriate id, you can get the trained model file in .h5 format
+      operationId: get_model
+      consumes:
+      - integer
+      produces:
+      - file
+      parameters:
+      - name: id
+        in: query
+        description: id of the model (trained by API) to be returned
+        required: false
+        type: integer
+        minimum: 1
+        format: int64
+      responses:
+        "200":
+          description: Returns model .h5 file
+          schema:
+            type: file
+        "400":
+          description: bad input parameter
+        "404":
+          description: classification not ready yet, try again later
+    post:
+      tags:
+      - developers
+      summary: Train and test new model
+      description: |
+        By passing in training and test dataset, you train the model and get the id of the model
+      operationId: train_model
+      consumes:
+      - multipart/form-data
+      produces:
+      - integer
+      parameters:
+      - name: trainingset
+        in: formData
+        description: training dataset .csv file consisting of normal/malicious labeled examples (labels as last column)
+        required: true
+        type: file
+        collectionFormat: csv
+      - name: testset
+        in: formData
+        description: test dataset .csv file consisting of normal/malicious labeled examples (labels as last column)
+        required: true
+        type: file
+        collectionFormat: csv
+      responses:
+        "200":
+          description: new model id
+          schema:
+            $ref: '#/definitions/Id'
+        "400":
+          description: bad input parameter
+    put:
+      tags:
+      - developers
+      summary: Changes the model loaded to the API to the new model designeted by passed id
+      description: |
+        By passing in another model id, the model that is loaded to the API and is used for classification is changed to the another model
+      operationId: change_model
+      produces:
+      - application/json
+      parameters:
+      - name: id
+        in: query
+        description: id of the model that supposed to be loaded
+        required: false
+        type: integer
+        minimum: 1
+        format: int64
+      responses:
+        "200":
+          description: model loaded correctly
+        "400":
+          description: bad input parameter
+  /classification:
+    get:
+      tags:
+      - developers
+      summary: Return results of classification/<id> if it is ready to be returned
+      description: |
+        By passing in the appropriate id, you can get the classification results if it is ready
+      operationId: get_classification
+      produces:
+      - application/json
+      parameters:
+      - name: id
+        in: query
+        description: id of searched classification
+        required: false
+        type: integer
+        minimum: 1
+        format: int64
+      responses:
+        "200":
+          description: classification with id is ready
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/ClassificationResult'
+        "400":
+          description: bad input parameter
+        "425":
+          description: classification not ready yet, try again later
+    post:
+      tags:
+      - developers
+      summary: Run classification on inputted data
+      description: Runs the classification process based on the raw traffic passed as an argument
+      operationId: add_classification
+      consumes:
+      - multipart/form-data
+      produces:
+      - integer
+      parameters:
+      - name: rawTraffic
+        in: formData
+        description: Raw traffic (or .pcap) to be classified
+        required: true
+        type: file
+      responses:
+        "200":
+          description: data received, classification done
+          schema:
+            $ref: '#/definitions/Id'
+        "400":
+          description: invalid input
+definitions:
+  Id:
+    required:
+    - id
+    properties:
+      id:
+        type: integer
+        format: uuid
+        example: 42
+  ClassificationResult:
+    type: object
+    properties:
+      ClassificationResult:
+        $ref: '#/definitions/ClassificationResult_ClassificationResult'
+  ClassificationResult_ClassificationResult:
+    type: object
+    required:
+    - (-0.001, 150.0]
+    - (-0.001, 50.0]
+    - (100.0, 150.0]
+    - (1050.0, 1200.0]
+    - (1200.0, 1350.0]
+    - (1350.0, 1500.0]
+    - (150.0, 200.0]
+    - (150.0, 300.0]
+    - (1500.0, 10000.0]
+    - (200.0, 250.0]
+    - (250.0, 300.0]
+    - (300.0, 350.0]
+    - (300.0, 450.0]
+    - (350.0, 400.0]
+    - (400.0, 450.0]
+    - (450.0, 500.0]
+    - (450.0, 600.0]
+    - (50.0, 100.0]
+    - (500.0, 550.0]
+    - (600.0, 750.0]
+    - (750.0, 900.0]
+    - (900.0, 1050.0]
+    - byte_rate
+    - dport_g
+    - dport_le
+    - duration
+    - entropy_tcp_len
+    - entropy_tcp_pkts
+    - ip.avg_bytes_tot_len
+    - ip.header_len
+    - ip.payload_len
+    - ip.pkts_per_flow
+    - malware
+    - max_tcp_len
+    - max_tcp_pkts
+    - mean_tcp_len
+    - mean_tcp_pkts
+    - min_tcp_len
+    - min_tcp_pkts
+    - pkts_rate
+    - sport_g
+    - sport_le
+    - ssl.tls_version
+    - std_tcp_len
+    - std_tcp_pkts
+    - tcp.ack
+    - tcp.fin
+    - tcp.psh
+    - tcp.rst
+    - tcp.syn
+    - tcp.tcp_session_payload_down_len_x
+    - tcp.tcp_session_payload_down_len_y
+    - tcp.tcp_session_payload_up_len_x
+    - tcp.tcp_session_payload_up_len_y
+    - tcp.urg
+    - tcp_bytes_per_flow
+    - tcp_pkts_per_flow
+    - time_between_pkts_avg
+    - time_between_pkts_max
+    - time_between_pkts_min
+    - time_between_pkts_std
+    - time_between_pkts_sum
+    properties:
+      ip.pkts_per_flow:
+        type: number
+        example: 2.19074E-4
+      duration:
+        type: number
+        example: 0.07676047
+      ip.header_len:
+        type: number
+        example: 2.19074E-4
+      ip.payload_len:
+        type: number
+        example: 0.0015523917
+      ip.avg_bytes_tot_len:
+        type: number
+        example: 0.052023828
+      time_between_pkts_sum:
+        type: number
+        example: 6.44238E-4
+      time_between_pkts_avg:
+        type: number
+        example: 0.16395321
+      time_between_pkts_max:
+        type: number
+        example: 0.114508174
+      time_between_pkts_min:
+        type: number
+        example: 2.5364E-5
+      time_between_pkts_std:
+        type: number
+        example: 0.14787547
+      (-0.001, 50.0]:
+        type: number
+        example: 1.768816E-4
+      (50.0, 100.0]:
+        type: number
+        example: 0.0
+      (100.0, 150.0]:
+        type: number
+        example: 0.0
+      (150.0, 200.0]:
+        type: number
+        example: 0.0
+      (200.0, 250.0]:
+        type: number
+        example: 0.16666667
+      (250.0, 300.0]:
+        type: number
+        example: 0.0
+      (300.0, 350.0]:
+        type: number
+        example: 0.0
+      (350.0, 400.0]:
+        type: number
+        example: 0.0
+      (400.0, 450.0]:
+        type: number
+        example: 0.0
+      (450.0, 500.0]:
+        type: number
+        example: 0.0
+      (500.0, 550.0]:
+        type: number
+        example: 0.0
+      tcp_pkts_per_flow:
+        type: number
+        example: 1.4606E-4
+      pkts_rate:
+        type: number
+        example: 7.7714E-6
+      tcp_bytes_per_flow:
+        type: number
+        example: 8.98747E-5
+      byte_rate:
+        type: number
+        example: 7.7714E-6
+      tcp.tcp_session_payload_up_len_x:
+        type: number
+        example: 1.4606E-4
+      tcp.tcp_session_payload_down_len_x:
+        type: number
+        example: 1.4606E-4
+      (-0.001, 150.0]:
+        type: number
+        example: 2.359047E-4
+      (150.0, 300.0]:
+        type: number
+        example: 0.0
+      (300.0, 450.0]:
+        type: number
+        example: 0.0
+      (450.0, 600.0]:
+        type: number
+        example: 0.0
+      (600.0, 750.0]:
+        type: number
+        example: 0.0
+      (750.0, 900.0]:
+        type: number
+        example: 0.0
+      (900.0, 1050.0]:
+        type: number
+        example: 0.0
+      (1050.0, 1200.0]:
+        type: number
+        example: 0.0
+      (1200.0, 1350.0]:
+        type: number
+        example: 0.0
+      (1350.0, 1500.0]:
+        type: number
+        example: 0.0
+      (1500.0, 10000.0]:
+        type: number
+        example: 0.0
+      tcp.fin:
+        type: number
+        example: 0.0
+      tcp.syn:
+        type: number
+        example: 0.6
+      tcp.rst:
+        type: number
+        example: 0.0
+      tcp.psh:
+        type: number
+        example: 0.0
+      tcp.ack:
+        type: number
+        example: 0.0
+      tcp.urg:
+        type: number
+        example: 0.0
+      tcp.tcp_session_payload_up_len_y:
+        type: number
+        example: 0.0
+      tcp.tcp_session_payload_down_len_y:
+        type: number
+        example: 0.0
+      sport_g:
+        type: number
+        example: 2.19074E-4
+      sport_le:
+        type: number
+        example: 0.0
+      dport_g:
+        type: number
+        example: 0.0
+      dport_le:
+        type: number
+        example: 0.004225352
+      mean_tcp_pkts:
+        type: number
+        example: 0.766523
+      std_tcp_pkts:
+        type: number
+        example: 0.0
+      min_tcp_pkts:
+        type: number
+        example: 0.766523
+      max_tcp_pkts:
+        type: number
+        example: 0.766523
+      entropy_tcp_pkts:
+        type: number
+        example: 0.0
+      mean_tcp_len:
+        type: number
+        example: 0.0012773658
+      std_tcp_len:
+        type: number
+        example: 0.0019393202
+      min_tcp_len:
+        type: number
+        example: 0.0
+      max_tcp_len:
+        type: number
+        example: 0.0016033625
+      entropy_tcp_len:
+        type: number
+        example: 0.0
+      ssl.tls_version:
+        type: number
+        example: 0.0
+      malware:
+        type: number
+        example: 1.0
