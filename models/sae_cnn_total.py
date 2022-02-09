@@ -188,7 +188,7 @@ def trainSAE_CNN(x_train_norm, x_train_mal, x_train, y_train, nb_epoch_cnn, nb_e
     # model_total = Model(inputs=[model_j.input], outputs=[outputs], name='model_total')
 
     # model_total.save('saved_models/sae_total_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
-    plot_model(cnn, to_file='./sae_cnn_total.png', show_shapes=True, show_layer_names=True, expand_nested=True)
+    # plot_model(cnn, to_file='./sae_cnn_total.png', show_shapes=True, show_layer_names=True, expand_nested=True)
     return cnn
 
     # y_pred = cnn.predict([x_test])
