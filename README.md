@@ -9,7 +9,7 @@ python3 server/server.py
 ```
 
 ### Prediction
-Prediction currently is trained to detect bot attacks ("Ares (developed by Python): remote shell, file upload/download, capturing" from [CIC IDS database] (https://www.unb.ca/cic/datasets/ids-2018.html) )
+Prediction currently is trained to detect bot attacks ("Ares (developed by Python): remote shell, file upload/download, capturing" from [CIC IDS database](https://www.unb.ca/cic/datasets/ids-2018.html) )
 Performing prediction on existing model (either default one, or changed to a freshly trained one by following the steps in the previous section) can be done by requesting a classification using curl:
 ```
 curl -X POST --data-binary "@anydata.pcap" http://127.0.0.1:5000/classification
