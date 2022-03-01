@@ -235,7 +235,7 @@ def add_classification():
                      "-c", f'./server/mmt-probe.conf',
                      "-X", f'input.source=./server/pcap/{classification_id}.pcap',
                      "-X", f'file-output.output-file={classification_id}.csv',
-                     "-X", f'file-output.output-dir=./server/csv/'])
+                     "-X", f'file-output.output-dir={predictions_dir}'])
 
     for filename in Path(predictions_dir).glob(f"*_0_{classification_id}.csv"):
         filename.unlink()
