@@ -173,10 +173,10 @@ def trainSAE_CNN(x_train_norm, x_train_mal, x_train, y_train, nb_epoch_cnn, nb_e
 
     print("Saving")
 
-    if(save):
-        autoencoder_norm.save('saved_models/sae_cnn_norm_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
-        autoencoder_mal.save('saved_models/sae_cnn_mal_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
-        cnn.save('saved_models/sae_cnn_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
+    # if(save):
+    autoencoder_norm.save('./saved_models/sae_cnn_norm_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
+    autoencoder_mal.save('./saved_models/sae_cnn_mal_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
+    cnn.save('./saved_models/sae_cnn_{}.h5'.format(datenow.strftime("%Y-%m-%d_%H-%M-%S")))
 
 
     # inp = Input(shape=(input_dim,))

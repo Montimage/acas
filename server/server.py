@@ -20,12 +20,12 @@ from sklearn.metrics import confusion_matrix
 from tensorflow.keras.models import load_model
 
 from flask import Flask, request, make_response, Response
-from models.sae_cnn_total import trainSAE_CNN
-from tools.tools import saveConfMatrix, saveScores
 
 sys.path.append(sys.path[0] + '/..')
 from mmt.readerMMT import eventsToFeatures
 from tools.tools import dataScale_cnn
+from models.sae_cnn_total import trainSAE_CNN
+from tools.tools import saveConfMatrix, saveScores
 
 prediction_names = ['ip.session_id', 'meta.direction', 'ip', 'ip.pkts_per_flow', 'duration', 'ip.header_len',
                     'ip.payload_len', 'ip.avg_bytes_tot_len', 'time_between_pkts_sum',
@@ -53,10 +53,11 @@ models_dir = os.path.join('./', 'models')
 # os.makedirs(models_dir, exists_ok=True)
 
 # predictions_dir = os.path.join(app.instance_path, 'csv')
-predictions_dir = os.path.join('./', 'csv')
+predictions_dir = os.path.join('./server/', 'csv')
 # os.makedirs(predictions_dir, exists_ok=True)
-default_model_path = os.path.join(
-    '/home/mra/Documents/Montimage/encrypted-trafic/entra/saved_models/sae_cnn_2022-02-02_16-15-25.h5')
+print(os.getcwd())
+
+default_model_path = './saved_models/sae_cnn_2022-03-01_10-17-30.h5'
 current_path = default_model_path
 model = None
 
@@ -68,7 +69,7 @@ def load_def_model():
     model = load_model(default_model_path)
 
 
-# curl -X PUT 'http://127.0.0.1:5000/model?id=1'
+# curl -X PUT 'http://127.0.0.1:5000/model?id=1' OK
 @app.route('/model', methods=["PUT"])
 def change_model():
     id = request.args.get('id')
@@ -84,10 +85,12 @@ def change_model():
     else:
         return Response(f'No such file {new_path}',status=400)
 
-# curl -X GET http://127.0.0.1:5000/training-results/1 -F what='conf'
+# curl -X GET http://127.0.0.1:5000/training-results/1 -F what='conf' OK 
 @app.route('/training-results/<int:id>', methods=["GET"])
 def get_training_results(id, what='conf'):
 
+    print("MODELS:"+models_dir)
+    
     if id >= model_next_id or id < 1:
         return f"There is no model with id={id}\n"
     if what == 'conf':
@@ -100,11 +103,12 @@ def get_training_results(id, what='conf'):
         return Response("Wrong option, available only conf/stats/preds",status=400)
 
     if os.path.isfile(res_dir):
+        print(res_dir)
         return flask.send_file(path_or_file=res_dir, mimetype='text/csv', as_attachment=True)
     else:
         return Response(f"Sth wrong with the result file {what}",status=400)
 
-# curl -X GET http://127.0.0.1:5000/model/1 --output 'output.h5'
+# curl -X GET http://127.0.0.1:5000/model/1 --output 'output.h5' OK
 @app.route('/model/<int:id>', methods=["GET"])
 def get_model(id):
     m_path = f"{models_dir}/{id}.h5"
@@ -117,7 +121,7 @@ def get_model(id):
         # response.mimetype = 'text/csv'
         return flask.send_file(path_or_file=m_path, mimetype='application', as_attachment=True)
 
-# curl -X POST "http://127.0.0.1:5000/model?nb_epoch_sae=2&batch_size_sae=16&nb_epoch_cnn=1&batch_size_cnn=32" -F "files=@BotTrain_31704_samples.csv" -F "files=@BotTest_13586_samples.csv"
+# curl -X POST "http://127.0.0.1:5000/model?nb_epoch_sae=2&batch_size_sae=16&nb_epoch_cnn=1&batch_size_cnn=32" -F "files=@BotTrain_31704_samples.csv" -F "files=@BotTest_13586_samples.csv" OK
 @app.route("/model", methods=["POST"])
 def train_model():
     files = request.files.getlist('files')
@@ -218,18 +222,20 @@ def add_classification():
 
     # if not os.path.isfile(f"pcap/{classification_id}.pcap"):
     #     return Response(f"No pcap file",status=400)
-
-    with open(f"pcap/{classification_id}.pcap", "wb") as f:
+    print(os.getcwd())
+    with open(f"./server/pcap/{classification_id}.pcap", "wb") as f:
         f.write(request.get_data())
         f.close()
 
     # Run probe on the pcap file
     # Example: ./probe -X input.source="./pcap/3.pcap" -X file-output.output-file="3.csv"
     #           -X file-output.output-dir="./csv/"
-    subprocess.call(["./probe",
-                     "-X", f'input.source=./pcap/{classification_id}.pcap',
+    print(os.getcwd())
+    subprocess.call(["./server/probe",
+                     "-c", f'./server/mmt-probe.conf',
+                     "-X", f'input.source=./server/pcap/{classification_id}.pcap',
                      "-X", f'file-output.output-file={classification_id}.csv',
-                     "-X", f'file-output.output-dir=./csv/'])
+                     "-X", f'file-output.output-dir=./server/csv/'])
 
     for filename in Path(predictions_dir).glob(f"*_0_{classification_id}.csv"):
         filename.unlink()
@@ -238,9 +244,9 @@ def add_classification():
     # cnn = load_model(current_path)
 
     for filename in Path(predictions_dir).glob(f"*_1_{classification_id}.csv"):
-        filename.rename(f"./csv/{classification_id}.csv")
+        filename.rename(f"./server/csv/{classification_id}.csv")
 
-    input_csv = f"./csv/{classification_id}.csv"
+    input_csv = f"./server/csv/{classification_id}.csv"
 
     start_time = time()
     print("Processing {}".format(input_csv))
