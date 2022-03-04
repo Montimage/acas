@@ -1,9 +1,12 @@
+
+
 ### Installing
 
 In order to install and run the service, the following steps need to be followed:
 1. Cloning the project
-2. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-) by using the script in the project ./server/install-dependencies.sh
-3. Running the Python server server.py:
+2. git submodule update --init --recursive
+3. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-) by using the script in the project ./server/install-dependencies.sh
+4. Running the Python server server.py:
 ```
 python3 server/server.py
 ```

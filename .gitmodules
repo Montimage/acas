@@ -1,0 +1,9 @@
+[submodule "server/third-party/probe"]
+	path = server/third-party/probe
+	url = https://github.com/Montimage/mmt-probe.git
+[submodule "server/third-party/dpi"]
+	path = server/third-party/dpi
+	url = https://github.com/Montimage/mmt-dpi.git
+[submodule "server/third-party/security"]
+	path = server/third-party/security
+	url = https://github.com/Montimage/mmt-security.git
