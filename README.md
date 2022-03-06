@@ -1,11 +1,13 @@
 
 
+
 ### Installing
 
 In order to install and run the service, the following steps need to be followed:
 1. Cloning the project
 2. git submodule update --init --recursive
 3. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-) by using the script in the project ./server/install-dependencies.sh
+-> Workaround: MMT security - generates invalid characters in `security/src/dpi/mmt-dpi` from line 8556 --> replace with `MMT_U8_DATA`
 4. Running the Python server server.py:
 ```
 python3 server/server.py
