@@ -25,7 +25,9 @@ where ID_NUM is the id of the classification returned by POST function that exec
 
 ## Training new model
 Train and test datasets need to be in .csv format and contain the features, where last column is the label (normal:0, malicious: 1). Training can be done by using curl, for instance in folder ./data/:
-`curl -X POST "http://127.0.0.1:5000/model?nb_epoch_sae=2&batch_size_sae=16&nb_epoch_cnn=1&batch_size_cnn=32" -F "files=@BotTrain_31704_samples.csv" -F "files=@BotTest_13586_samples.csv" `
+```
+curl -X POST "http://127.0.0.1:5000/model?nb_epoch_sae=2&batch_size_sae=16&nb_epoch_cnn=1&batch_size_cnn=32" -F "files=@BotTrain_31704_samples.csv" -F "files=@BotTest_13586_samples.csv"
+```
 where BotTrain_31704_samples.csv and BotTest_13586_samples.csv are exemplary training and testing datasets. There are couple of additional parameters that can be used for parametrisizing the training:
 
 - batch_size_sae – number of training samples to be utilized before the SAE model internal parameters are updated; it is the same for both SAE models; default value is 16
@@ -34,15 +36,24 @@ where BotTrain_31704_samples.csv and BotTest_13586_samples.csv are exemplary tra
 - nb_epoch_cnn – number of complete passes through the training dataset in order to train CNN; default value is 5
 
 The funciton is saving the model on the server and returing the ID of the model. In order to save the model locally use:
-`curl -X GET http://127.0.0.1:5000/model/ID_NUM --output 'output.h5'`
+```
+curl -X GET http://127.0.0.1:5000/model/ID_NUM --output 'output.h5'
+```
+
 where ID_NUM is the model ID returned by previous command, and output.h5 is a name of the file in which the model will be saved.
 Getting further results of the training (the results on testing dataset) can be done by using curl:
-`curl -X GET http://127.0.0.1:5000/training-results/1 -F what='conf'`
+```
+curl -X GET http://127.0.0.1:5000/training-results/1 -F what='conf'
+```
+
 Where ID_NUM is the id of the model and the what parameter can be one of three values: conf, preds, stats. The function is returning the .csv file containing the confusion matrix, predictions for test dataset (inputted during training process described before), or statistical metrics (accuracy, recall, precision and F1 score) respectively to the selected option in the what parameter.
 
 ### Changing default model for a freshly trained one
 In order to change the current used model for performing classification for a new one (trained with commands above) it can be done by execuring the following:
-`curl -X PUT 'http://127.0.0.1:5000/model?id=MODEL_ID'`
+```
+curl -X PUT 'http://127.0.0.1:5000/model?id=MODEL_ID'
+```
+
 where MODEL_ID is the id of the model returned after succesful training process.
 
 
@@ -51,9 +62,13 @@ where MODEL_ID is the id of the model returned after succesful training process.
 On bitbucket (original repo)
 
 `git remote add upstream git@othergitserver.com:user/mirroredrepo.git`
+
+and
+
 `git push upstream --mirror`
 
 On GH (mirrored repo)
 `git remote update`
+and
 `git pull --ff`
 
