@@ -197,7 +197,7 @@ def train_model():
 
     model_next_id += 1
     # print(model_next_id)
-    return str(model_id) + "\n"
+    return Response(f"\n\nTraining/testing is done, new model id is: {model_id}",status=200)
 
 # curl -X GET http://127.0.0.1:5000/classification/1
 @app.route('/classification/<int:id>', methods=["GET"])
@@ -235,7 +235,7 @@ def add_classification():
                      "-c", f'./server/mmt-probe.conf',
                      "-X", f'input.source=./server/pcap/{classification_id}.pcap',
                      "-X", f'file-output.output-file={classification_id}.csv',
-                     "-X", f'file-output.output-dir={predictions_dir}'])
+                     "-X", f'file-output.output-dir={predictions_dir}/'])
 
     for filename in Path(predictions_dir).glob(f"*_0_{classification_id}.csv"):
         filename.unlink()
@@ -276,7 +276,7 @@ def add_classification():
     features = None
 
     classification_next_id += 1
-    return str(classification_id) + "\n"
+    return Response(f"\n\nClassification is done, classification id: {classification_id}",status=200)
 
 
 if __name__ == "__main__":
