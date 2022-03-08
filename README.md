@@ -61,14 +61,15 @@ where MODEL_ID is the id of the model returned after succesful training process.
 
 On bitbucket (original repo)
 
-`git remote add upstream git@othergitserver.com:user/mirroredrepo.git`
-
-and
-
-`git push upstream --mirror`
+```
+git remote add upstream git@othergitserver.com:user/mirroredrepo.git
+git push upstream --mirror
+```
 
 On GH (mirrored repo)
-`git remote update`
-and
-`git pull --ff`
+
+```
+git remote update
+git pull --ff
+```
 
