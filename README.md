@@ -73,3 +73,8 @@ git remote update
 git pull --ff
 ```
 
+On Gitlab in acas/
+
+```
+git pull origin main
+```

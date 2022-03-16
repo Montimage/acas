@@ -1,0 +1,36 @@
+version: '3'
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper2
+    ports:
+      - '2181:2181'
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka2
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+# Run: sudo docker-compose -f kafka/docker-compose.yaml up -d
+# If port 2181 is busy with other zookeeper, chceck with:
+# sudo lsof -i :2181
+# netstat -ant | grep :2181
+# and use kill the pid
+# sudo docker-compose -f docker-compose.yaml up -d
+# sudo docker ps
+# docker exec -it kafka /bin/sh
+# Creating topics: kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic messages ## create a topic
+#kafka-topics.sh --list --zookeeper zookeeper:2181 ## list the topics
+#kafka-topics.sh --zookeeper zookeeper:2181 --describe --topic messages ##info about configuration of topic
+#kafka-configs.sh --alter --zookeeper zookeeper:2181 --entity-type topics --entity-name messages --add-config retention.ms=60000 ## change retention time for topic
+#kafka-configs.sh --alter --zookeeper zookeeper:2181 --entity-type topics --entity-name messages --add-config max.message.bytes=104857600 ## change max allowed message size (bytes) for topic
+
+
+
+#tensorflow_model_server --port=8500 --rest_api_port=8501 --model_name=sae_cnn --model_base_path=/home/mra/Documents/Montimage/encrypted-trafic/entra/cnn
+#var/snap/docker/common/var-lib-docker/
+#docker run -p 8501:8501 --name tfserving_classifier --mount type=bind,source=/home/mra/Documents/Montimage/encrypted-trafic/entra/cnn/,target=/models/cnn -e MODEL_NAME=cnn -t tensorflow/serving
