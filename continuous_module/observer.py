@@ -103,7 +103,7 @@ if __name__ == "__main__":
     model = load_model(
         model_path)  # "/home/mra/Documents/Montimage/encrypted-trafic/entra/saved_models/sae_cnn_2022-03-02_10-37-27.h5")
     print("Model loaded.\nLoading scaler...")
-    scaler = pickle.load(open(scaler_path, 'rb'))  # "./scalers/scaler_2022-03-02_10-37-27.pkl"
+    scaler = pickle.load(open(scaler_path, 'rb'))  # "./saved_scalers/scaler_2022-03-02_10-37-27.pkl"
     print("Scaler loaded.")
 
     res=np.ndarray(shape=(2,2), dtype=float, order='F')

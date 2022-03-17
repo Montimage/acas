@@ -1,4 +1,5 @@
 from matplotlib import pyplot as plt
+import pickle
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, \
     classification_report
 from sklearn.utils import shuffle
@@ -7,7 +8,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sn
 
-
+"""
+Help functions including functions for saving the confusion matrix/scores, data scaling etc. 
+"""
 CIC_col_names = ['Flow Duration', 'Tot Fwd Pkts', 'Tot Bwd Pkts', 'TotLen Fwd Pkts',
              'TotLen Bwd Pkts', 'Fwd Pkt Len Max', 'Fwd Pkt Len Min', 'Fwd Pkt Len Mean', 'Fwd Pkt Len Std',
              'Bwd Pkt Len Max',
@@ -54,7 +57,7 @@ def saveScores(y_true, y_pred, filepath):
     stats.to_csv(filepath, header=True)
 
 
-def dataScale(train_data, validation_data, test_data):
+def dataScale(train_data, validation_data, test_data, datetime):
     train_data = shuffle(train_data)
     x_train = train_data.iloc[:, :-1]
     y_train = train_data.iloc[:, -1]
@@ -63,6 +66,7 @@ def dataScale(train_data, validation_data, test_data):
     scaler = MinMaxScaler()
     scaler.fit(x_train)
     x_train = scaler.transform(x_train)
+    pickle.dump(scaler, open('./saved_scalers/scaler_{}'.format(datetime.strftime("%Y-%m-%d_%H-%M-%S")), 'wb'))
 
     x_val = validation_data.iloc[:, :-1]
     y_val = validation_data.iloc[:, -1]
@@ -79,7 +83,19 @@ def dataScale(train_data, validation_data, test_data):
     return x_train, y_train, x_test, y_test, x_val, y_val
 
 
-def dataScale_cnn(train_data,  test_data, validation_data = None):
+def dataScale_cnn(train_data, test_data, datetime, validation_data = None):
+    """
+    Scales the training and test data (validation is optional) and divides it into x (inputs) and y (labels)
+    for SAE+CNN model - returns separate set of normal and malicious data for training SAE and joined one for CNN.
+
+    :param train_data: dataframe with training set (inputs, labels)
+    :param test_data: dataframe with test set (inputs, labels)
+    :param validation_data: dataframe with validation (inputs, labels)
+    :return: x_train_norm, x_train_mal - scaled divided training set for SAE normal/malicious; x_test_norm, x_test_mal
+    - scaled divided test set for SAE normal/malicious;  x_train, y_train, x_test, y_test - scaled train and test set
+    for CNN; scaler - MinMax scaler used for scaling the data
+
+    """
     train_data = shuffle(train_data)
     x_train = train_data.iloc[:, :-1]
     y_train = train_data.iloc[:, -1]
@@ -88,6 +104,8 @@ def dataScale_cnn(train_data,  test_data, validation_data = None):
     scaler = MinMaxScaler()
     scaler.fit(x_train)
     x_train = scaler.transform(x_train)
+
+    pickle.dump(scaler, open('./saved_scalers/scaler_{}'.format(datetime.strftime("%Y-%m-%d_%H-%M-%S")), 'wb'))
 
     x_train_norm = x_train[y_train[:] == 0, :]
     x_train_mal = x_train[y_train[:] == 1, :]
@@ -107,6 +125,6 @@ def dataScale_cnn(train_data,  test_data, validation_data = None):
         y_val = np.asarray(y_val, np.float32)
         x_val = scaler.transform(x_val)
 
-        return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test, x_val, y_val
+        return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test, x_val, y_val, scaler
 
-    return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test
+    return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test, scaler

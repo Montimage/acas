@@ -3,6 +3,10 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 
+"""
+Help funcitons for visualization of accuracy/error etc.
+
+"""
 
 def drawLossAccuracy(history, accuracy_file, loss_file):
     d = datetime.datetime.now()

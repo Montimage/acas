@@ -31,7 +31,7 @@ Change max allowed message size (bytes) for topic:
 File config.config in main project folder keeps info about path used for mmt-probe (input/output), watchdog (folder for monitoring new files from mmt) and paths to model and scaler used for predictions.
 
 1. Running brokers `sudo docker-compose -f continuous_module/docker-compose.yaml up -d`
-2. Terminal 1: python3 consumer.py  (it gets all messages at the end)
-3. Terminal 2: python3 observer.py (has watchdog and is responsible for monitoring mmt probe creation files)
-4. Terminal 3: python3 mmt-runner.py --> runs mmt probe with an example file
+2. Terminal 1: python3 continuous_module/consumer.py  (it gets all messages at the end)
+3. Terminal 2: python3 continuous_module/observer.py (has watchdog and is responsible for monitoring mmt probe creation files)
+4. Terminal 3: python3 mmt/mmt-runner.py --> runs mmt probe with an example file
 
