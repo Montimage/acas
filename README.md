@@ -4,7 +4,47 @@ In order to install and run the service, the following steps need to be followed
 1. Cloning the project
 2. While in the project folder executing `git submodule update --init --recursive`
 3. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-) by using the script in the project ./server/install-dependencies.sh
-4. Running the Python server server.py:
+
+### Using Kafka Producer
+After installing step:
+
+#### Kafka configuration
+Obligatory for running Kafka for the first time:
+1. Run: `sudo docker-compose -f continuous_module/docker-compose.yaml up -d`
+2. Creating topic in kafka:
+Running Kafka shell:
+```
+docker exec -it kafka /bin/sh
+```
+In the shell creating topic: 
+```
+kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic messages
+```
+Change max allowed message size (bytes) for topic:
+```
+kafka-configs.sh --alter --zookeeper zookeeper:2181 --entity-type topics --entity-name messages --add-config max.message.bytes=104857600
+```
+
+
+If kafka topic is already created run: `sudo docker-compose -f continuous_module/docker-compose.yaml up -d`
+
+#### Monitoring files created by MMT-probe and making predictions
+Configuration including directories of MMT-probe, input files and output path for MMT-probe, ML model and scaler directories can be found in ./config.config
+
+1. Once Kafka configuration is done, run Kafka consumer (to see the messages that will be sent) 
+`python3 continuous_module/consumer.py`
+2. Running python script
+`python3 continuous_module/observer.py`
+that runs monitoring of the folder (from config) to which MMT-probe will be saving reports, and on closing a file it is running a ML prediction utilizing the model and scaler from directory provided in config file
+3. Running script providing data using MMT-probe
+`python3 mmt/mmtRunner.py`
+that runs MMT-probe on an exemplary .pcap file.
+
+
+### Running API
+After installing step:
+
+1. Running the Python server server.py:
 ```
 python3 server/server.py
 ```
