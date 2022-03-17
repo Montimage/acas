@@ -3,7 +3,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
@@ -12,12 +11,16 @@ sys.path.append(sys.path[0] + '/..')
 from mmt.readerMMT import pickleFeatureFilesFromFile
 
 
+"""
+Functions creating training and testing datasets
+"""
+
 def createTrainTestSet(path, train_samples, test_samples):
     """
-
-    :param path:
-    :param train_samples:
-    :param test_samples:
+    Creates a training and testing .csv files with balanced 0/1 classes
+    :param path: folder with .pkl files (already calculated dataframes with ML features)
+    :param train_samples: number of train samples
+    :param test_samples: number of test samples
     :return:
     """
     m_ndt = pd.DataFrame()
@@ -88,6 +91,18 @@ def createTrainTestSet(path, train_samples, test_samples):
 
 def createSetFromCSV(in_file_normal, out_file_normal, in_file_mal, out_file_mal, train_test_path, train_samples_no,
                      test_samples_no):
+    '''
+    Creates training and testing datasets from MMT csv report files (done from pcaps)
+
+    :param in_file_normal: mmt-probe .csv report file based on normal traffic only
+    :param out_file_normal: path for pkl file with calculated ML features (normal traffic only)
+    :param in_file_mal: mmt-probe .csv report file based on malicious traffic only
+    :param out_file_mal: path for pkl file with calculated ML features (malicious traffic only)
+    :param train_test_path: path of data form which train/test set should be created (so should be same as .pkl files) ##TODO
+    :param train_samples_no: number of samples to be in training set
+    :param test_samples_no: number of samples to be in test set
+    :return:
+    '''
     ### Creating from MMT csv files (done from pcaps) -> pkl files with features (separate: normal + bot)
     # normal
     pickleFeatureFilesFromFile(in_file_normal, out_file_normal, is_malware=False)
@@ -101,6 +116,13 @@ def createSetFromCSV(in_file_normal, out_file_normal, in_file_mal, out_file_mal,
 
 
 def runMMT(pcap_dir, csv_dir, csv_name):
+    '''
+    Runs mmt as subprocess
+    :param pcap_dir: .pcap to be processed
+    :param csv_dir: .csv path of mmt-probe report
+    :param csv_name: .csv name of mmt-probe report
+    :return:
+    '''
     subprocess.call(["./server/probe",
                      "-c", f'./server/mmt-probe.conf',
                      "-X", f'input.source={pcap_dir}',
@@ -118,6 +140,20 @@ def createSetFromPcap(pcap_normal_path, csv_normal_name_output, csv_normal_outpu
                       pcap_malicious_path, csv_mal_name_output, csv_mal_output_dir,
                       train_test_path,
                       train_samples_no, test_samples_no):
+    '''
+    Creates training and testing datasets from malicious and normal pcaps
+
+    :param pcap_normal_path: pcap with normal traffic only
+    :param csv_normal_name_output: name of .csv of mmt-probe report (normal)
+    :param csv_normal_output_dir: .csv of mmt-probe report (normal)
+    :param pcap_malicious_path: pcap with malicious traffic only
+    :param csv_mal_name_output: name of .csv of mmt-probe report (malicious)
+    :param csv_mal_output_dir: .csv of mmt-probe report (malicious)
+    :param train_test_path: path of data form which train/test set should be created (so should be same as .pkl files) ##TODO
+    :param train_samples_no: number of samples to be in training set
+    :param test_samples_no: number of samples to be in test set
+    :return:
+    '''
     # normal
     runMMT(pcap_dir=pcap_normal_path, csv_dir=csv_normal_output_dir, csv_name=csv_normal_name_output)
     pickleFeatureFilesFromFile(f'{csv_normal_output_dir}/{csv_normal_name_output}.csv',
@@ -148,33 +184,3 @@ createSetFromPcap(pcap_normal_path='./data/ctu_bot_1/normal/normal2.pcap', csv_n
                   train_test_path='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu_bot_1/',
                   train_samples_no=int(n_of_samples_total * 0.7),
                   test_samples_no=int(n_of_samples_total * 0.3))
-
-# runMMT(pcap_dir='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu_bot_1/output_00000_19700101010006_filtered.pcap',
-#        csv_dir='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu_bot_1/',
-#        csv_name='malicious')
-# pickleFeatureFilesFromFile(in_file="/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu_bot_1/malicious.csv",
-#                            out_file="/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu_bot_1/malicious",
-#                            is_malware=True)
-#################
-# runMMT(pcap_dir='./data/ctu/2013-12-17_capture1.pcap', csv_dir='./data/ctu/', csv_name='normal')
-# runMMT(pcap_dir='./data/ctu/attacker-10.0.0.42.pcap', csv_dir='./data/ctu/', csv_name='attacker')
-# createSetFromCSV(in_file_normal='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/normal.csv',
-#                  out_file_normal='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/normal',
-#                  in_file_mal='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/attacker.csv',
-#                  out_file_mal='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/attacker',
-#                  train_test_path='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/',
-#                  train_samples_no=int(n_of_samples_total*0.3),
-#                  test_samples_no=int(n_of_samples_total*0.7))
-
-#################
-# pickleFeatureFilesFromFile("/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/attacker.csv",
-#                            "/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/attacker",
-#                            is_malware=True)
-# pickleFeatureFilesFromFile("/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/normal.csv",
-#                            "/home/mra/Documents/Montimage/encrypted-trafic/entra/data/ctu/normal",
-#                            is_malware=False)
-# print("Train/test set.")
-# createTrainTestSet(path='/home/mra/Documents/Montimage/encrypted-trafic/entra/data/cic-mixed-2/',
-#                      train_samples=int(n_of_samples_total * 0.7),
-#                      test_samples=int(n_of_samples_total * 0.3))
-# print("Train/test set completed.")
