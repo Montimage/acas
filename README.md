@@ -2,7 +2,12 @@
 
 In order to install and run the service, the following steps need to be followed:
 1. Cloning the project
-2. While in the project folder executing `git submodule update --init --recursive`
+2. While in the project folder executing 
+```
+git submodule update --init --recursive
+git submodule sync
+git submodule update --remote
+```
 3. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-) by using the script in the project ./server/install-dependencies.sh
 
 ### Using Kafka Producer
