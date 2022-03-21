@@ -24,7 +24,7 @@ from flask import Flask, request, make_response, Response
 sys.path.append(sys.path[0] + '/..')
 from mmt.readerMMT import eventsToFeatures
 from tools.tools import dataScale_cnn
-from models.sae_cnn_total import trainSAE_CNN
+from model.sae_cnn import trainSAE_CNN
 from tools.tools import saveConfMatrix, saveScores
 
 prediction_names = ['ip.session_id', 'meta.direction', 'ip', 'ip.pkts_per_flow', 'duration', 'ip.header_len',

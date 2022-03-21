@@ -105,7 +105,7 @@ def dataScale_cnn(train_data, test_data, datetime, validation_data = None):
     scaler.fit(x_train)
     x_train = scaler.transform(x_train)
 
-    pickle.dump(scaler, open('./saved_scalers/scaler_{}'.format(datetime.strftime("%Y-%m-%d_%H-%M-%S")), 'wb'))
+    pickle.dump(scaler, open('./saved_scalers/scaler_{}.pkl'.format(datetime.strftime("%Y-%m-%d_%H-%M-%S")), 'wb'))
 
     x_train_norm = x_train[y_train[:] == 0, :]
     x_train_mal = x_train[y_train[:] == 1, :]
