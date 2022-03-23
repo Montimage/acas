@@ -7,6 +7,12 @@ import sys
 from kafka import KafkaProducer
 
 
+"""
+    Trains the model and sends it via kafka producer.
+
+"""
+
+
 sys.path.append(sys.path[0] + '/..')
 from tools.tools import saveConfMatrix, saveScores, dataScale_cnn
 from model.sae_cnn import trainSAE_CNN
