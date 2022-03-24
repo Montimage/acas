@@ -23,8 +23,7 @@ docker exec -it kafka /bin/sh
 ```
 In the shell creating topic: 
 ```
-kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic predictions
-kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic models
+kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic messages
 ```
 Change max allowed message size (bytes) for topic:
 ```
