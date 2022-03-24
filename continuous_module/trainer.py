@@ -8,7 +8,7 @@ from kafka import KafkaProducer
 
 
 """
-    Trains the model and sends it via kafka producer.
+    Trains the model, saves it localy and sends it via kafka producer.
 
 """
 
@@ -70,11 +70,12 @@ def train_model(train_data_path, test_data_path, nb_epoch_cnn, nb_epoch_sae,batc
                              index=False,
                              header=test_data.columns)
 
+    # sending the results
     producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
-    j_cnn = cnn.to_json()
-    print(f'Producing message @ {datetime.now()} | Message')  # = {str(j_res)}')
+    j_cnn = cnn.to_json().encode('utf-8')
+
+    print(f'Producing message @ {datetime.now()}')
     psend = producer.send('messages', j_cnn)
-    # print(psend)
     producer.flush()
 
 

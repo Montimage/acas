@@ -15,15 +15,17 @@ services:
       KAFKA_ADVERTISED_HOST_NAME: localhost
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
 
-# Run: sudo docker-compose -f kafka/docker-compose.yaml up -d
-# If port 2181 is busy with other zookeeper, chceck with:
+# Run: sudo docker-compose -f continous_module/docker-compose.yaml up -d
+# If port 2181 is busy with other zookeeper (docker ps), chceck with:
 # sudo lsof -i :2181
 # netstat -ant | grep :2181
 # and use kill the pid
-# sudo docker-compose -f docker-compose.yaml up -d
-# sudo docker ps
+
+
+# Creating topics in docker shell
 # docker exec -it kafka /bin/sh
-# Creating topics: kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic messages ## create a topic
+# kafka-topics.sh --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 1 --topic TOPIC_NAME
+
 #kafka-topics.sh --list --zookeeper zookeeper:2181 ## list the topics
 #kafka-topics.sh --zookeeper zookeeper:2181 --describe --topic messages ##info about configuration of topic
 #kafka-configs.sh --alter --zookeeper zookeeper:2181 --entity-type topics --entity-name messages --add-config retention.ms=60000 ## change retention time for topic
