@@ -1,11 +1,3 @@
-"""
-TODO:
- 1. Perform classification in the background thread (return the classification id immediately)
- 2. Classification should return 1 or more IDS for one input pcap
- 3. Handle multiple CSV from the mmt-probe
- 4. Think about streaming and online analysis
-"""
-
 import os.path
 import subprocess
 import sys
@@ -26,6 +18,11 @@ from mmt.readerMMT import eventsToFeatures
 from tools.tools import dataScale_cnn
 from model.sae_cnn import trainSAE_CNN
 from tools.tools import saveConfMatrix, saveScores
+
+"""
+    API for training, testing, predicting, described in PUZZLE deliverable 3.5
+"""
+
 
 prediction_names = ['ip.session_id', 'meta.direction', 'ip', 'ip.pkts_per_flow', 'duration', 'ip.header_len',
                     'ip.payload_len', 'ip.avg_bytes_tot_len', 'time_between_pkts_sum',

@@ -14,6 +14,7 @@ from tensorflow.keras.utils import plot_model
 """
 
 def trainSAE_CNN(x_train_norm, x_train_mal, x_train, y_train, nb_epoch_cnn, nb_epoch_sae, batch_size_cnn, batch_size_sae, datenow):
+    print(x_train.shape[1])
     input_dim = x_train.shape[1]
     act_reg = L1L2()
     act = LeakyReLU()

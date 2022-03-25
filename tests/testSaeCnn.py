@@ -10,6 +10,11 @@ sys.path.append(sys.path[0] + '/..')
 from tools.tools import saveConfMatrix, saveScores, dataScale_cnn
 from model.sae_cnn import trainSAE_CNN
 
+"""
+    Runs tests (pretty much the same as runPredictions)
+
+"""
+
 train_data = pd.read_csv(
     './data/BotTrain_31704_samples.csv', delimiter=",")
 

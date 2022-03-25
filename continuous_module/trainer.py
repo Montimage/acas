@@ -75,7 +75,7 @@ def train_model(train_data_path, test_data_path, nb_epoch_cnn, nb_epoch_sae,batc
     j_cnn = cnn.to_json().encode('utf-8')
 
     print(f'Producing message @ {datetime.now()}')
-    psend = producer.send('messages', j_cnn)
+    psend = producer.send('models', j_cnn)
     producer.flush()
 
 
