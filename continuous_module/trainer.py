@@ -8,7 +8,7 @@ from kafka import KafkaProducer
 
 
 """
-    Trains the model, saves it localy and sends it via kafka producer.
+    Trains the model, saves it locally and sends it via kafka producer.
 
 """
 

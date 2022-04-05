@@ -9,6 +9,14 @@ Help funcitons for visualization of accuracy/error etc.
 """
 
 def drawLossAccuracy(history, accuracy_file, loss_file):
+    """
+    Draws accuracy for training/testing
+
+    :param history: from fitted model
+    :param accuracy_file: filename
+    :param loss_file: filename
+    :return:
+    """
     d = datetime.datetime.now()
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
@@ -31,6 +39,17 @@ def drawLossAccuracy(history, accuracy_file, loss_file):
 
 
 def drawError(autoencoder, x_test, y_test, d=None, errorpath=None):
+
+    """
+    Draws error rate for autoencoder (used for structure with only one stacked autoencoder to get threshold)
+
+    :param autoencoder: autoencoder model (trained)
+    :param x_test: test dataset (x)
+    :param y_test:  test dataset (y)
+    :param d: datetime (optional)
+    :param errorpath: path for saving the plot  (optional)
+    :return:
+    """
     if d is None:
         d = datetime.datetime.now()
     test_x_predictions = autoencoder.predict(x_test)
