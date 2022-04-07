@@ -8,7 +8,7 @@ max_message_size = 104857600  # bytes
 
 if __name__ == '__main__':
     consumer = KafkaConsumer(
-        "models",
+        "predictions",
         bootstrap_servers='localhost:9092',
         auto_offset_reset='earliest',
         group_id=None,

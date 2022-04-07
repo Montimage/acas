@@ -73,10 +73,10 @@ class Handler(watchdog.events.PatternMatchingEventHandler):
 
         # print(res.nbytes)
         # results json encoding
-        j_res = json.dumps(res[0:400], cls=NumpyArrayEncoder).encode('utf-8')
+        j_res = json.dumps(res, cls=NumpyArrayEncoder).encode('utf-8')
 
         print(f'Producing message @ {datetime.now()} | Message')  # = {str(j_res)}')
-        psend = producer.send('messages', j_res)
+        psend = producer.send('predictions', j_res)
         # print(psend)
         producer.flush()
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read(conf_path)
 
-    mmt_csv_dir = config['DEFAULT']['mmt_probe_csv_dir']  # r"/home/mra/Documents/Montimage/encrypted-trafic/entra/server/csv/"
+    mmt_csv_dir = config['DEFAULT']['mmt_probe_csv_dir']
     model_path = config['DEFAULT']['model_path']
     scaler_path = config['DEFAULT']['scaler_path']
     print(f'{mmt_csv_dir},{model_path},{scaler_path}')
@@ -100,8 +100,7 @@ if __name__ == "__main__":
         exit('Config does not contain all needed paths')
 
     print("Loading model...")
-    model = load_model(
-        model_path)  # "/home/mra/Documents/Montimage/encrypted-trafic/entra/saved_models/sae_cnn_2022-03-02_10-37-27.h5")
+    model = load_model(model_path)
     print("Model loaded.\nLoading scaler...")
     scaler = pickle.load(open(scaler_path, 'rb'))  # "./saved_scalers/scaler_2022-03-02_10-37-27.pkl"
     print("Scaler loaded.")
