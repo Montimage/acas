@@ -8,7 +8,11 @@ git submodule update --init --recursive
 git submodule sync
 git submodule update --remote
 ```
-3. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-) by using the script in the project ./server/install-dependencies.sh
+3. Installing third-party programs (MMT-Probe, MMT-SDK, MMT-)
+```sh
+cd server/
+./install-dependencies.sh
+```
 
 ### Using Kafka Producer
 After installing step:
