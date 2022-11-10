@@ -125,6 +125,6 @@ def dataScale_cnn(train_data, test_data, datetime, validation_data = None):
         y_val = np.asarray(y_val, np.float32)
         x_val = scaler.transform(x_val)
 
-        return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test, x_val, y_val, scaler
+        return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test
 
-    return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test, scaler
+    return x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test

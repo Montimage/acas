@@ -158,19 +158,18 @@ def train_model():
     # for file in request.files.getlist('files'):
     #     data = pd.read_csv(file)
 
-    x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test = dataScale_cnn(train_data,
-                                                                                                         test_data)
+    d = datetime.now()
+    x_train_norm, x_train_mal, x_test_norm, x_test_mal, x_train, y_train, x_test, y_test = dataScale_cnn(train_data, test_data, datetime=d)
     # print(x_train_norm.shape)
     # print(x_train.shape)
     # print(x_train_mal.shape)
     # exec
     input_dim = x_train.shape[1]
 
-    d = datetime.now()
     cnn = trainSAE_CNN(x_train_norm=x_train_norm, x_train_mal=x_train_mal,
                        x_train=x_train, y_train=y_train,
                        nb_epoch_cnn=nb_epoch_cnn, nb_epoch_sae=nb_epoch_sae,
-                       batch_size_cnn=batch_size_cnn, batch_size_sae=batch_size_sae, datenow=d, save=False)
+                       batch_size_cnn=batch_size_cnn, batch_size_sae=batch_size_sae, datenow=d)
 
     cnn.save(f'{models_dir}/{model_id}.h5')
 
