@@ -82,12 +82,12 @@ def change_model():
     else:
         return Response(f'No such file {new_path}',status=400)
 
-# curl -X GET http://127.0.0.1:5000/training-results/1 -F what='conf' OK 
+# curl -X GET http://127.0.0.1:5000/training-results/1 -F what='conf' OK
 @app.route('/training-results/<int:id>', methods=["GET"])
 def get_training_results(id, what='conf'):
 
     print("MODELS:"+models_dir)
-    
+
     if id >= model_next_id or id < 1:
         return f"There is no model with id={id}\n"
     if what == 'conf':
@@ -219,42 +219,48 @@ def add_classification():
 
     # if not os.path.isfile(f"pcap/{classification_id}.pcap"):
     #     return Response(f"No pcap file",status=400)
+    print("Current location:")
     print(os.getcwd())
-    with open(f"./server/pcap/{classification_id}.pcap", "wb") as f:
+    pcapFilePath = "./server/pcap/" + str(classification_id) + ".pcap";
+    print("Saving the posted data to a pcap file at: {}".format(pcapFilePath));
+    with open(f"{pcapFilePath}", "wb") as f:
         f.write(request.get_data())
         f.close()
-
+    if not os.path.isfile(f"{pcapFilePath}"):
+        return Response(f"No pcap file",status=500)
     # Run probe on the pcap file
     # Example: ./probe -X input.source="./pcap/3.pcap" -X file-output.output-file="3.csv"
     #           -X file-output.output-dir="./csv/"
-    print(os.getcwd())
+    print("Going to run MMT to extract information from uploaded pcap file")
     subprocess.call(["./server/probe",
                      "-c", f'./server/mmt-probe.conf',
                      "-X", f'input.source=./server/pcap/{classification_id}.pcap',
                      "-X", f'file-output.output-file={classification_id}.csv',
                      "-X", f'file-output.output-dir={predictions_dir}/'])
 
+    #print("Going to remove *_0_{}.csv files".format(classification_id))
+    #for filename in Path(predictions_dir).glob(f"*_0_{classification_id}.csv"):
+    #    filename.unlink()
+
+    input_csv = f"./server/csv/" + str(classification_id) + ".csv"
+    print("Going to rename *_0_{}.csv files".format(classification_id))
     for filename in Path(predictions_dir).glob(f"*_0_{classification_id}.csv"):
-        filename.unlink()
+        filename.rename(f"{input_csv}")
+    if not os.path.isfile(f"{input_csv}"):
+        return Response(f"No input csv file",status=500)
 
-    # cnn_path = "/home/mra/Documents/Montimage/encrypted-trafic/entra/saved_models/sae_cnn_2022-02-02_16-15-25.h5"
-    # cnn = load_model(current_path)
-
-    for filename in Path(predictions_dir).glob(f"*_1_{classification_id}.csv"):
-        filename.rename(f"./server/csv/{classification_id}.csv")
-
-    input_csv = f"./server/csv/{classification_id}.csv"
-
+    print("Going to process the csv data file {}".format(input_csv))
     start_time = time()
     print("Processing {}".format(input_csv))
     ips, features = eventsToFeatures(input_csv)
 
     # if there are more ips then grouped samples from features (i.e. there is an ip but no features for the ip) -> we delete the ip from ip list
+    print("Going to merge features if there are more ips")
     ips = pd.merge(ips, features, how='inner', on=['ip.session_id', 'meta.direction'])
     ips = ips[['ip.session_id', 'meta.direction', 'ip']]
     features.drop(columns=['ip.session_id', 'meta.direction'], inplace=True)
 
-    print("Prediction - test")
+    print("Going to test the prediction")
     #
     global model
     y_pred = model.predict(features)
