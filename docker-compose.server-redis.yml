@@ -1,0 +1,65 @@
+# Docker Compose - Server + Redis Configuration
+# Runs the backend server and Redis/Valkey (no client)
+#
+# Usage:
+#   docker-compose -f docker-compose.server-redis.yml up -d --build
+
+version: '3.3'
+
+services:
+  valkey:
+    container_name: ndr_valkey
+    image: valkey/valkey:7-alpine
+    restart: unless-stopped
+    networks:
+      - ndr_network
+    command: valkey-server --appendonly yes
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  ndr_server:
+    container_name: ndr_server
+    image: mont/ndr-server
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "31057:31057"
+    networks:
+      - ndr_network
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://valkey:6379
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./src/server/deep-learning/models:/ndr-app/src/server/deep-learning/models
+      - ./src/server/deep-learning/trainings:/ndr-app/src/server/deep-learning/trainings
+      - ./src/server/deep-learning/predictions:/ndr-app/src/server/deep-learning/predictions
+      - ./src/server/deep-learning/xai:/ndr-app/src/server/deep-learning/xai
+      - ./src/server/deep-learning/attacks:/ndr-app/src/server/deep-learning/attacks
+      - ./src/server/mmt/outputs:/ndr-app/src/server/mmt/outputs
+      - ./src/server/mmt/pcaps:/ndr-app/src/server/mmt/pcaps
+    depends_on:
+      - valkey
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:31057/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ndr_network:
+    driver: bridge
+
+volumes:
+  valkey_data:
+    driver: local

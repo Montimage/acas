@@ -1,0 +1,41 @@
+.content {
+    max-width: 1200px;
+    margin: 20px auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.content>div {
+    width: 100%;
+}
+
+.ant-message-notice-content {
+    font-size: 20px;
+}
+
+.ant-message {
+    top: 100px;
+}
+
+.same-value {
+    background-color: green;
+}
+
+.different-value {
+    background-color: red;
+}
+
+.cmAD {
+    position: relative;
+    height: 330px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.cmAC {
+    position: relative;
+    height: 300px;
+    width: 100%;
+    max-width: 340px;
+}

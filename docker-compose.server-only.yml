@@ -1,0 +1,67 @@
+# Docker Compose - Server Only Configuration
+# Use this if you only want to run the backend server in Docker
+# 
+# Usage:
+#   docker-compose -f docker-compose.server-only.yml up -d
+#
+# This includes:
+#   - NDR Server (Node.js backend on port 31057)
+#   - Redis (Queue service on port 6379)
+
+version: '3.3'
+
+services:
+  ndr_server:
+    container_name: ndr_server
+    image: mont/ndr-server
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    # Use host network to access Redis running on host machine at localhost:6379
+    network_mode: "host"
+    env_file:
+      - .env
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./src/server/deep-learning/models:/ndr-app/src/server/deep-learning/models
+      - ./src/server/deep-learning/trainings:/ndr-app/src/server/deep-learning/trainings
+      - ./src/server/deep-learning/predictions:/ndr-app/src/server/deep-learning/predictions
+      - ./src/server/deep-learning/xai:/ndr-app/src/server/deep-learning/xai
+      - ./src/server/deep-learning/attacks:/ndr-app/src/server/deep-learning/attacks
+      - ./src/server/mmt/outputs:/ndr-app/src/server/mmt/outputs
+      - ./src/server/mmt/pcaps:/ndr-app/src/server/mmt/pcaps
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:31057/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis service commented out - using host Redis instead
+  # Uncomment if you want to run Redis in Docker
+  # redis:
+  #   container_name: ndr_redis
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - ndr_network
+  #   command: redis-server --appendonly yes
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+
+# networks:
+#   ndr_network:
+#     driver: bridge
+
+# volumes:
+#   redis_data:
+#     driver: local
