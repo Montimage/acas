@@ -1,1 +1,0 @@
-All scripts providing functions that deal with MMT reports (reading, extracting report attributes, ML feature calculation) and dealing with automatich execution of MMTprobe
