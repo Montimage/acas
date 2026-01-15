@@ -13,8 +13,13 @@ const { v4: uuidv4 } = require('uuid');
 const { startMMTOffline, getMMTStatus } = require('../mmt/mmt-connector');
 const { listFiles } = require('../utils/file-utils');
 const { REPORT_PATH } = require('../constants');
+const { resolvePcapPath } = require('../utils/pcapResolver');
+const { identifyUser } = require('../middleware/userAuth');
 
 const router = express.Router();
+
+// Apply user identification middleware to all routes
+router.use(identifyUser);
 
 /**
  * Wait for MMT to finish processing
@@ -150,6 +155,7 @@ router.get('/interfaces', (req, res) => {
 router.post('/offline', async (req, res) => {
   try {
     const { modelId, pcapFile, useQueue } = req.body || {};
+    const userId = req.userId;
 
     if (!modelId) {
       return res.status(400).json({
@@ -165,13 +171,22 @@ router.post('/offline', async (req, res) => {
       });
     }
 
-    console.log(`[Prediction] Running MMT analysis on ${pcapFile}`);
+    // Resolve pcap path: checks user uploads -> samples -> legacy PCAP_PATH
+    const resolvedPcapPath = resolvePcapPath(pcapFile, userId);
+    if (!resolvedPcapPath || !fs.existsSync(resolvedPcapPath)) {
+      return res.status(404).json({
+        error: 'PCAP file not found',
+        message: `The pcap file ${pcapFile} was not found in uploads or samples`
+      });
+    }
 
-    // Start MMT offline analysis
+    console.log(`[Prediction] Running MMT analysis on ${pcapFile} (resolved: ${resolvedPcapPath})`);
+
+    // Start MMT offline analysis with userId for path resolution
     const mmtResult = await new Promise((resolve) => {
       startMMTOffline(pcapFile, (status) => {
         resolve(status);
-      });
+      }, null, false, userId);
     });
 
     if (mmtResult.error) {
