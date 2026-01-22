@@ -30,11 +30,9 @@ RUN apt-get update -y && \
 RUN curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py && \
     python3.8 get-pip.py pip==20.0.2
 
-# Install NodeJS
-RUN curl -sL https://deb.nodesource.com/setup_19.x | bash && \
-    apt-get install -y nodejs && \
-    npm install pm2 -g && \
-    rm -rf /var/lib/apt/lists/*
+# Install NodeJS 20.x LTS using official binary
+RUN curl -fsSL https://nodejs.org/dist/v20.18.0/node-v20.18.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1 && \
+    npm install pm2 -g
 
 # Create app directory and set working directory
 WORKDIR /ndr-app
@@ -61,7 +59,8 @@ RUN dpkg -i src/server/mmt-packages/mmt-dpi*.deb && \
     dpkg -i src/server/mmt-packages/mmt-probe*.deb 2>/dev/null||true && \
     ldconfig && \
     mkdir -p src/server/mmt/outputs && \
-    if [ -f /opt/mmt/security/bin/mmt_security ]; then setcap cap_net_raw,cap_net_admin+eip /opt/mmt/security/bin/mmt_security || true; fi
+    if [ -f /opt/mmt/security/bin/mmt_security ]; then setcap cap_net_raw,cap_net_admin+eip /opt/mmt/security/bin/mmt_security || true; fi && \
+    if [ -f /opt/mmt/probe/mmt-probe.conf ]; then sed -i 's/ignore-remain-flow = true/ignore-remain-flow = false/' /opt/mmt/probe/mmt-probe.conf; fi
 
 # Create necessary directories
 RUN mkdir -p src/server/deep-learning/attacks \
