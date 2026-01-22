@@ -9,6 +9,7 @@ ARG REACT_APP_CLERK_PUBLISHABLE_KEY
 ARG REACT_APP_ADMIN_EMAILS
 ARG REACT_APP_ADMIN_USER_IDS
 ARG REACT_APP_ADMIN_ORG_ID
+ARG REACT_APP_MAX_PCAP_SIZE
 
 # Set as environment variables for build process
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
@@ -16,16 +17,15 @@ ENV REACT_APP_CLERK_PUBLISHABLE_KEY=$REACT_APP_CLERK_PUBLISHABLE_KEY
 ENV REACT_APP_ADMIN_EMAILS=$REACT_APP_ADMIN_EMAILS
 ENV REACT_APP_ADMIN_USER_IDS=$REACT_APP_ADMIN_USER_IDS
 ENV REACT_APP_ADMIN_ORG_ID=$REACT_APP_ADMIN_ORG_ID
+ENV REACT_APP_MAX_PCAP_SIZE=$REACT_APP_MAX_PCAP_SIZE
 
 # Install necessary dependencies
 RUN apt-get update && \
     apt-get install -y git wget cmake gcc g++ cpp curl software-properties-common && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Node.js and npm
-RUN curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+# Install Node.js 20.x LTS using official binary
+RUN curl -fsSL https://nodejs.org/dist/v20.18.0/node-v20.18.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1
 
 # Install serve globally
 RUN npm install -g serve
