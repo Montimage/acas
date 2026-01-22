@@ -379,7 +379,7 @@ class PredictPage extends Component {
       try {
         console.log('Starting simplified prediction for:', testingPcapFile, 'with model:', fetchModelId);
 
-        const queueResponse = await requestPredictOfflineSimplified(fetchModelId, testingPcapFile, true);
+        const queueResponse = await requestPredictOfflineSimplified(fetchModelId, testingPcapFile, true, this.props.userRole);
 
         console.log('Prediction queued:', queueResponse);
         this.setState({
