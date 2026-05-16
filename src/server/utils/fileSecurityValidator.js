@@ -8,8 +8,19 @@ const fs = require('fs');
 const path = require('path');
 const { PCAP_EXTENSIONS } = require('../constants');
 
-// Maximum file size: 20 MB (configurable via environment variable)
-const MAX_FILE_SIZE = parseInt(process.env.MAX_PCAP_SIZE) || 20 * 1024 * 1024; // 20 MB in bytes
+// Maximum file size in bytes. 0 (the default) disables the limit — set MAX_PCAP_SIZE
+// to a positive byte count to re-enable enforcement.
+const MAX_FILE_SIZE = (() => {
+  const raw = process.env.MAX_PCAP_SIZE;
+  if (raw == null || raw === '') return 0;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+})();
+
+// Pattern-based content scan is off by default. PCAPs of real attacks legitimately
+// contain payloads like <?php or system(), so flagging them as "malware" produces
+// false positives. Set STRICT_PCAP_VALIDATION=true to re-enable the scan.
+const STRICT_VALIDATION = String(process.env.STRICT_PCAP_VALIDATION || '').toLowerCase() === 'true';
 
 // PCAP magic numbers (file signatures)
 const PCAP_MAGIC_NUMBERS = [
@@ -56,7 +67,7 @@ function validateExtension(filename) {
  * @returns {object} - { valid: boolean, error: string|null, maxSize: number }
  */
 function validateFileSize(size) {
-  if (size > MAX_FILE_SIZE) {
+  if (MAX_FILE_SIZE > 0 && size > MAX_FILE_SIZE) {
     return {
       valid: false,
       error: `File size exceeds maximum limit of ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(2)} MB`,
@@ -170,16 +181,19 @@ async function validatePcapFile(file, filePath = null) {
       errors.push('Invalid file format. File does not appear to be a valid PCAP file');
     }
 
-    // 4. Scan for malware/suspicious patterns (check first 8KB)
-    const scanSize = Math.min(file.size, 8192);
-    const scanBuffer = filePath && fs.existsSync(filePath)
-      ? fs.readFileSync(filePath, { encoding: null }).slice(0, scanSize)
-      : (file.data ? file.data.slice(0, scanSize) : null);
+    // 4. Optional pattern scan (off unless STRICT_PCAP_VALIDATION=true). Skipped for
+    // PCAPs because captured attack traffic legitimately contains attacker payloads.
+    if (STRICT_VALIDATION) {
+      const scanSize = Math.min(file.size, 8192);
+      const scanBuffer = filePath && fs.existsSync(filePath)
+        ? fs.readFileSync(filePath, { encoding: null }).slice(0, scanSize)
+        : (file.data ? file.data.slice(0, scanSize) : null);
 
-    if (scanBuffer) {
-      const malwareScan = scanForMalware(scanBuffer);
-      if (!malwareScan.safe) {
-        errors.push(`Security threat detected: ${malwareScan.threats.join(', ')}`);
+      if (scanBuffer) {
+        const malwareScan = scanForMalware(scanBuffer);
+        if (!malwareScan.safe) {
+          errors.push(`Security threat detected: ${malwareScan.threats.join(', ')}`);
+        }
       }
     }
   } catch (err) {

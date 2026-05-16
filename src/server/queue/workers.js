@@ -506,6 +506,7 @@ ruleBasedQueue.process('detect', CONCURRENCY.ruleBasedDetection, async (job) => 
     const { exec } = require('child_process');
     const { promisify } = require('util');
     const execAsync = promisify(exec);
+    const { preparePcapForSecurity } = require('../utils/pcapConverter');
     
     // Resolve input path
     let inputPath = filePath || path.join(PCAP_PATH, pcapFile);
@@ -519,6 +520,25 @@ ruleBasedQueue.process('detect', CONCURRENCY.ruleBasedDetection, async (job) => 
     fs.mkdirSync(outDir, { recursive: true, mode: 0o777 });
     
     await job.progress(10);
+    
+    // Prepare pcap file (convert if needed for LINUX_SLL or other non-Ethernet formats)
+    let pcapPrep;
+    try {
+      pcapPrep = await preparePcapForSecurity(inputPath);
+      if (pcapPrep.converted) {
+        logInfo(`[Worker] Converted ${pcapPrep.linkType} to Ethernet format for job ${job.id}`);
+      }
+    } catch (convError) {
+      console.warn(`[Worker] PCAP conversion failed for job ${job.id}, using original file:`, convError.message);
+      // Fallback to original file if conversion fails
+      pcapPrep = {
+        path: inputPath,
+        converted: false,
+        cleanup: () => {}
+      };
+    }
+
+    const processPath = pcapPrep.path;
     
     // Resolve mmt_security binary
     const resolveSecurityBin = () => {
@@ -538,9 +558,16 @@ ruleBasedQueue.process('detect', CONCURRENCY.ruleBasedDetection, async (job) => 
     
     const bin = resolveSecurityBin();
     const args = [];
-    args.push('-t', inputPath);
-    if (verbose) args.push('-v');
-    if (excludeRules) args.push('-x', String(excludeRules));
+    args.push('-t', processPath);
+    const excludeMask = (() => {
+      if (excludeRules == null) return null;
+      const list = Array.isArray(excludeRules) ? excludeRules : [excludeRules];
+      const filtered = list
+        .map(v => (v == null ? '' : String(v).trim()))
+        .filter(Boolean);
+      return filtered.length > 0 ? filtered.join(',') : null;
+    })();
+    if (excludeMask) args.push('-x', excludeMask);
     if (cores) args.push('-c', String(cores));
     args.push('-f', `${outDir}/`);
     
@@ -550,7 +577,15 @@ ruleBasedQueue.process('detect', CONCURRENCY.ruleBasedDetection, async (job) => 
     await job.progress(20);
     
     // Execute mmt_security
-    const { stdout, stderr } = await execAsync(cmd);
+    let stdout, stderr;
+    try {
+      const result = await execAsync(cmd, { maxBuffer: 200 * 1024 * 1024 });
+      stdout = result.stdout;
+      stderr = result.stderr;
+    } finally {
+      // Always cleanup temporary converted file
+      pcapPrep.cleanup();
+    }
     
     await job.progress(80);
     

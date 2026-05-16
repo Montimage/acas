@@ -232,8 +232,8 @@ router.post('/', async (req, res) => {
     // Log upload attempt
     console.log(`[PCAP] Upload attempt by user ${userId}: ${file.name} (${file.size} bytes)`);
 
-    // Validate file size before processing
-    if (file.size > MAX_FILE_SIZE) {
+    // Validate file size before processing (only when MAX_PCAP_SIZE env var enables a cap).
+    if (MAX_FILE_SIZE > 0 && file.size > MAX_FILE_SIZE) {
       return res.status(413).json({
         error: 'File too large',
         message: `File size exceeds maximum limit of ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(2)} MB`,

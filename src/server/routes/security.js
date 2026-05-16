@@ -17,6 +17,7 @@ const {
 const { LOCAL_NATS_URL, TRAINING_PATH, REPORT_PATH, PCAP_PATH } = require('../constants');
 const { identifyUser } = require('../middleware/userAuth');
 const { resolvePcapPath } = require('../utils/pcapResolver');
+const { preparePcapForSecurity } = require('../utils/pcapConverter');
 // Output folder for mmt_security CSVs
 const SECURITY_OUT_DIR = path.join(__dirname, '../mmt/outputs');
 // Import unified session manager
@@ -37,6 +38,15 @@ async function getNatsConnection(customUrl, customUsername, customPassword) {
     ? { servers, user, pass }
     : { servers };
   return connect(opts);
+}
+
+function normalizeExcludeRules(value) {
+  if (value == null) return null;
+  const list = Array.isArray(value) ? value : [value];
+  const filtered = list
+    .map(v => (v == null ? '' : String(v).trim()))
+    .filter(Boolean);
+  return filtered.length > 0 ? filtered.join(',') : null;
 }
 
 function isValidIPv4(ip) {
@@ -337,7 +347,8 @@ router.post('/rule-based/online/start', async (req, res) => {
     const args = [];
     args.push('-i', iface);
     if (verbose) args.push('-v');
-    if (excludeRules) args.push('-x', String(excludeRules));
+    const excludeMask = normalizeExcludeRules(excludeRules);
+    if (excludeMask) args.push('-x', excludeMask);
     if (cores) args.push('-c', String(cores));
     // ensure trailing slash and include rotation interval so files are created under the run folder
     args.push('-f', `${runDir}/:${Number(intervalSec)}`);
@@ -602,10 +613,29 @@ router.post('/rule-based/offline', async (req, res) => {
     ensureDir(outDir);
     const bin = resolveSecurityBin();
 
+    // Prepare pcap file (convert if needed for LINUX_SLL or other non-Ethernet formats)
+    let pcapPrep;
+    try {
+      pcapPrep = await preparePcapForSecurity(inputPath);
+      if (pcapPrep.converted) {
+        console.log(`[SECURITY][rule-based][offline] Converted ${pcapPrep.linkType} to Ethernet format`);
+      }
+    } catch (convError) {
+      console.warn('[SECURITY][rule-based][offline] PCAP conversion failed, using original file:', convError.message);
+      // Fallback to original file if conversion fails
+      pcapPrep = {
+        path: inputPath,
+        converted: false,
+        cleanup: () => {}
+      };
+    }
+
+    const processPath = pcapPrep.path;
+
     const args = [];
-    args.push('-t', inputPath);
-    if (verbose) args.push('-v');
-    if (excludeRules) args.push('-x', String(excludeRules));
+    args.push('-t', processPath);
+    const excludeMask = normalizeExcludeRules(excludeRules);
+    if (excludeMask) args.push('-x', excludeMask);
     if (cores) args.push('-c', String(cores));
     args.push('-f', `${outDir}/`);
 
@@ -616,13 +646,18 @@ router.post('/rule-based/offline', async (req, res) => {
     sessionManager.createSession('attacks', sessionId, 'offline', {
       pcapFile,
       filePath: inputPath,
+      processedPath: processPath,
+      converted: pcapPrep.converted,
       outputDir: outDir,
       outputFile: null,
       excludeRules,
       cores,
     });
 
-    exec(cmd, (error, stdout, stderr) => {
+    exec(cmd, { maxBuffer: 200 * 1024 * 1024 }, (error, stdout, stderr) => {
+      // Always cleanup temporary converted file
+      pcapPrep.cleanup();
+
       if (error) {
         console.error('mmt_security offline error:', stderr || error.message);
         sessionManager.updateSession('attacks', sessionId, {
@@ -649,12 +684,17 @@ router.post('/rule-based/offline', async (req, res) => {
         file,
         count: uniqueAlerts.length,
         alerts: uniqueAlerts,
-        ruleVerdicts
+        ruleVerdicts,
+        converted: pcapPrep.converted
       };
 
       if (fallbackToSync) {
         response.warning = 'Redis/Valkey service is unavailable. Automatically switched to synchronous processing mode.';
         response.message = 'Rule-based detection completed in sync mode (Redis unavailable, automatic fallback)';
+      }
+
+      if (pcapPrep.converted) {
+        response.conversionInfo = `PCAP was automatically converted from ${pcapPrep.linkType} to Ethernet format`;
       }
 
       res.send(response);
