@@ -16,6 +16,9 @@ const {
 
 const { LOCAL_NATS_URL, TRAINING_PATH, REPORT_PATH, PCAP_PATH } = require('../constants');
 const { identifyUser } = require('../middleware/userAuth');
+const ruleManager = require('../utils/ruleManager');
+// Compile any rules whose .so is missing (idempotent); safe to call on boot.
+ruleManager.bootstrap().catch(e => console.error('[ruleManager] bootstrap error:', e.message));
 const { resolvePcapPath } = require('../utils/pcapResolver');
 const { preparePcapForSecurity } = require('../utils/pcapConverter');
 // Output folder for mmt_security CSVs
@@ -308,6 +311,60 @@ router.get('/rule-based/alerts', async (req, res) => {
   }
 });
 
+// List available rules (catalog for the selection table)
+router.get('/rule-based/rules', async (req, res) => {
+  try {
+    const refresh = req.query.refresh === 'true';
+    res.json({ ok: true, rules: await ruleManager.listRules({ refresh }) });
+  } catch (e) {
+    res.status(500).send(e.message || 'Failed to list rules');
+  }
+});
+
+// Raw XML source of a single rule
+router.get('/rule-based/rules/:id/xml', (req, res) => {
+  const xml = ruleManager.getRuleXml(req.params.id);
+  if (!xml) return res.status(404).send('No XML source for this rule');
+  res.type('application/xml').send(xml);
+});
+
+// Add a user rule: { filename, xml }. Compiles and validates before saving.
+router.post('/rule-based/rules', async (req, res) => {
+  try {
+    const { filename, xml } = req.body || {};
+    if (!filename || !xml) return res.status(400).send('Missing filename or xml');
+    const r = await ruleManager.addRule(filename, xml);
+    if (!r.ok) return res.status(400).send(r.error);
+    res.json({ ok: true, id: r.id, rules: await ruleManager.listRules({ refresh: true }) });
+  } catch (e) {
+    res.status(500).send(e.message || 'Failed to add rule');
+  }
+});
+
+// Edit a user-added rule's XML. Predefined rules are protected by ruleManager.
+router.put('/rule-based/rules/:id', async (req, res) => {
+  try {
+    const { xml } = req.body || {};
+    if (!xml) return res.status(400).send('Missing xml');
+    const r = await ruleManager.updateRule(req.params.id, xml);
+    if (!r.ok) return res.status(400).send(r.error);
+    res.json({ ok: true, id: r.id, rules: await ruleManager.listRules({ refresh: true }) });
+  } catch (e) {
+    res.status(500).send(e.message || 'Failed to update rule');
+  }
+});
+
+// Remove a user-added rule. Predefined rules are protected by ruleManager.
+router.delete('/rule-based/rules/:id', async (req, res) => {
+  try {
+    const r = ruleManager.deleteRule(req.params.id);
+    if (!r.ok) return res.status(400).send(r.error);
+    res.json({ ok: true, rules: await ruleManager.listRules({ refresh: true }) });
+  } catch (e) {
+    res.status(500).send(e.message || 'Failed to remove rule');
+  }
+});
+
 router.post('/rule-based/online/start', async (req, res) => {
   try {
     const { iface, intervalSec = 5, verbose = true, excludeRules, cores } = req.body || {};
@@ -357,7 +414,7 @@ router.post('/rule-based/online/start', async (req, res) => {
     console.log('[SECURITY][rule-based][online] Executing:', cmd);
 
     // Spawn via bash so sudo can prompt non-interactively (assume configured). We do not pipe stdin.
-    const child = spawn('bash', ['-lc', cmd], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('bash', ['-lc', cmd], { stdio: ['ignore', 'pipe', 'pipe'], cwd: ruleManager.WORKSPACE });
     const verdictMap = new Map();
     let combinedLog = '';
     const parseAndUpdate = (txt) => {
@@ -654,7 +711,7 @@ router.post('/rule-based/offline', async (req, res) => {
       cores,
     });
 
-    exec(cmd, { maxBuffer: 200 * 1024 * 1024 }, (error, stdout, stderr) => {
+    exec(cmd, { cwd: ruleManager.WORKSPACE, maxBuffer: 200 * 1024 * 1024 }, (error, stdout, stderr) => {
       // Always cleanup temporary converted file
       pcapPrep.cleanup();
 

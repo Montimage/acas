@@ -2546,6 +2546,167 @@
         }
       }
     },
+    "/security/rule-based/rules" : {
+      "get" : {
+        "tags" : [ "security" ],
+        "summary" : "List security rules",
+        "description" : "List the mmt-security rule catalog (predefined + user-added). Each rule reports whether its XML source is available and whether it was added by a user.",
+        "operationId" : "listRuleBasedRules",
+        "parameters" : [ {
+          "name" : "refresh",
+          "in" : "query",
+          "description" : "If true, re-read the catalog from mmt_security instead of returning the cached list.",
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "ok" : { "type" : "boolean" },
+                    "rules" : {
+                      "type" : "array",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : { "type" : "integer" },
+                          "type" : { "type" : "string" },
+                          "description" : { "type" : "string" },
+                          "events" : { "type" : "array", "items" : { "type" : "string" } },
+                          "hasXml" : { "type" : "boolean" },
+                          "userAdded" : { "type" : "boolean" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : { "description" : "Failed to list rules" }
+        }
+      },
+      "post" : {
+        "tags" : [ "security" ],
+        "summary" : "Add a user security rule",
+        "description" : "Create a new user rule. The XML is compiled and validated before being saved; the filename's numeric id prefix must match the rule's property_id, and the id must not collide with an existing rule.",
+        "operationId" : "addRuleBasedRule",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "required" : [ "filename", "xml" ],
+                "properties" : {
+                  "filename" : { "type" : "string", "example" : "300.my_rule.xml" },
+                  "xml" : { "type" : "string", "description" : "Raw mmt-security rule XML (must contain property_id matching the filename id)." }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Rule added; returns the refreshed catalog",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "ok" : { "type" : "boolean" },
+                    "id" : { "type" : "integer" },
+                    "rules" : { "type" : "array", "items" : { "type" : "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "400" : { "description" : "Missing/invalid fields, id mismatch, id collision, or compile error" },
+          "500" : { "description" : "Failed to add rule" }
+        }
+      }
+    },
+    "/security/rule-based/rules/{id}" : {
+      "put" : {
+        "tags" : [ "security" ],
+        "summary" : "Update a user security rule",
+        "description" : "Replace the XML of a user-added rule (the id is fixed). Predefined rules cannot be edited. The change is rolled back if the new XML fails to compile.",
+        "operationId" : "updateRuleBasedRule",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : { "type" : "string" }
+        } ],
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "required" : [ "xml" ],
+                "properties" : {
+                  "xml" : { "type" : "string", "description" : "Raw mmt-security rule XML; property_id must equal the path id." }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : { "description" : "Rule updated; returns the refreshed catalog" },
+          "400" : { "description" : "Missing xml, not a user-added rule, id mismatch, or compile error" },
+          "500" : { "description" : "Failed to update rule" }
+        }
+      },
+      "delete" : {
+        "tags" : [ "security" ],
+        "summary" : "Delete a user security rule",
+        "description" : "Remove a user-added rule (its XML and compiled .so). Predefined rules cannot be removed.",
+        "operationId" : "deleteRuleBasedRule",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : { "type" : "string" }
+        } ],
+        "responses" : {
+          "200" : { "description" : "Rule removed; returns the refreshed catalog" },
+          "400" : { "description" : "Not a user-added rule" },
+          "500" : { "description" : "Failed to remove rule" }
+        }
+      }
+    },
+    "/security/rule-based/rules/{id}/xml" : {
+      "get" : {
+        "tags" : [ "security" ],
+        "summary" : "Get a rule's XML source",
+        "description" : "Return the raw XML source of a single rule by id.",
+        "operationId" : "getRuleBasedRuleXml",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : { "type" : "string" }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Rule XML source",
+            "content" : {
+              "application/xml" : {
+                "schema" : { "type" : "string" }
+              }
+            }
+          },
+          "404" : { "description" : "No XML source for this rule" }
+        }
+      }
+    },
     "/security/rule-based/alerts" : {
       "get" : {
         "tags" : [ "security" ],

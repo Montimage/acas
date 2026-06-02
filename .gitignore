@@ -42,6 +42,12 @@ Thumbs.db
 *.exe
 *.war
 
+# MMT rules runtime data
+# Compiled rules are generated from xml/ on bootstrap — never commit them.
+src/server/mmt-rules/rules/
+# Runtime manifest of user-added rule ids.
+src/server/mmt-rules/user-rules.json
+
 # Large media files
 *.mp4
 *.tiff
