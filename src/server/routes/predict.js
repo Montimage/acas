@@ -344,7 +344,7 @@ router.get('/job/:jobId', async (req, res) => {
  */
 router.post('/online', async (req, res) => {
   try {
-    const { modelId, interface: netInf } = req.body || {};
+    const { modelId, interface: netInf, hostId } = req.body || {};
 
     if (!modelId) {
       return res.status(400).json({
@@ -360,13 +360,16 @@ router.post('/online', async (req, res) => {
       });
     }
 
-    // Use the existing startPredicting with type='online'
+    // Use the existing startPredicting with type='online'. hostId omitted/'local'
+    // runs mmt-probe on the ACAS machine; a registered edge hostId captures on
+    // that edge and ACAS runs the model on the pulled feature CSVs.
     const predictConfig = {
       modelId,
       inputTraffic: {
         type: 'online',
         value: {
-          netInf
+          netInf,
+          hostId
         }
       }
     };
@@ -384,12 +387,15 @@ router.post('/online', async (req, res) => {
         success: true,
         mode: 'online',
         interface: netInf,
+        hostId: hostId || 'local',
         modelId,
         predictionId: predictingStatus.lastPredictedId,
         sessionId: predictingStatus.config?.inputTraffic?.value?.sessionId,
         isRunning: predictingStatus.isRunning,
         startedAt: predictingStatus.lastPredictedAt,
-        message: `Online prediction started on interface ${netInf} using model ${modelId}`
+        message: hostId && hostId !== 'local'
+          ? `Online prediction started on edge ${hostId} (${netInf}) using model ${modelId}`
+          : `Online prediction started on interface ${netInf} using model ${modelId}`
       });
     });
 
@@ -438,6 +444,8 @@ router.get('/online/status', (req, res) => {
  */
 router.post('/online/stop', (req, res) => {
   try {
+    // Optional sessionId stops one session; omit to stop all (single-session default).
+    const { sessionId } = req.body || {};
     stopOnlinePrediction((predictingStatus) => {
       res.json({
         success: true,
@@ -446,7 +454,7 @@ router.post('/online/stop', (req, res) => {
         predictionId: predictingStatus.lastPredictedId,
         stoppedAt: Date.now()
       });
-    });
+    }, sessionId);
   } catch (error) {
     console.error('[Online Prediction Stop] Error:', error);
     res.status(500).json({

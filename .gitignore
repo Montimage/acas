@@ -42,6 +42,16 @@ Thumbs.db
 *.exe
 *.war
 
+# Local environment file (may hold credentials/URLs — never commit)
+.env
+
+# Remote edge registry (contains per-edge bearer tokens — never commit)
+src/server/mmt/edges.json
+
+# Runtime analysis outputs (already-tracked demo data stays tracked; ignore new runs)
+src/server/mmt/outputs/
+src/server/deep-learning/predictions/
+
 # MMT rules runtime data
 # Compiled rules are generated from xml/ on bootstrap — never commit them.
 src/server/mmt-rules/rules/

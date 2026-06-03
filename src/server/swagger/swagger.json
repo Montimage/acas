@@ -71,9 +71,12 @@
       "get" : {
         "tags" : [ "mmt" ],
         "summary" : "Get the status of MMT Tool",
-        "description" : "Get the status of MMT Tool",
+        "description" : "Get the status of MMT Tool. Optional hostId/sessionId target a remote edge session.",
         "operationId" : "getMMTStatus",
-        "parameters" : [ ],
+        "parameters" : [
+          { "name" : "hostId", "in" : "query", "schema" : { "type" : "string" }, "description" : "Edge host id; omit or 'local' for the ACAS machine." },
+          { "name" : "sessionId", "in" : "query", "schema" : { "type" : "string" }, "description" : "Remote session id (returned when starting online on an edge)." }
+        ],
         "responses" : {
           "200" : {
             "description" : "Successful operation",
@@ -92,9 +95,12 @@
       "get" : {
         "tags" : [ "mmt" ],
         "summary" : "Stop analyzing",
-        "description" : "Stop the analyzing process if there is any",
+        "description" : "Stop the analyzing process if there is any. Optional hostId/sessionId stop a remote edge session.",
         "operationId" : "stopMMT",
-        "parameters" : [ ],
+        "parameters" : [
+          { "name" : "hostId", "in" : "query", "schema" : { "type" : "string" }, "description" : "Edge host id; omit or 'local' for the ACAS machine." },
+          { "name" : "sessionId", "in" : "query", "schema" : { "type" : "string" }, "description" : "Remote session id to stop." }
+        ],
         "responses" : {
           "200" : {
             "description" : "Successful operation",
@@ -193,10 +199,10 @@
       "post" : {
         "tags" : [ "mmt" ],
         "summary" : "Start monitor a network interface in real-time",
-        "description" : "Monitor a network interface in real-time",
+        "description" : "Run mmt-probe (and/or mmt_security) on a NIC in real-time. Runs on the ACAS machine by default; pass a registered edge hostId to capture on that edge — ACAS pulls the output back. For remote edges, engine selects probe | security | both. Returns sessionId for remote sessions.",
         "operationId" : "runMMTOnline",
         "requestBody" : {
-          "description" : "The name of the interface on the monitoring machine",
+          "description" : "Interface to monitor. Omit hostId (or use 'local') for the ACAS machine; pass a registered edge hostId to monitor a remote machine.",
           "content" : {
             "application/json" : {
               "schema" : {
@@ -204,7 +210,18 @@
                 "properties" : {
                   "netInf" : {
                     "type" : "string",
-                    "example" : "enp0s1"
+                    "example" : "enp0s3"
+                  },
+                  "hostId" : {
+                    "type" : "string",
+                    "description" : "Registered edge host id; omit or 'local' for the ACAS machine.",
+                    "example" : "local"
+                  },
+                  "engine" : {
+                    "type" : "string",
+                    "enum" : [ "probe", "security", "both" ],
+                    "description" : "Remote edges only: which engine(s) to run. Default 'both'.",
+                    "example" : "both"
                   }
                 }
               }
@@ -226,6 +243,232 @@
           "401" : {
             "description" : "Cannot launch MMT Tool"
           }
+        }
+      }
+    },
+    "/mmt/probe-config" : {
+      "get" : {
+        "tags" : [ "mmt" ],
+        "summary" : "View the mmt-probe config",
+        "description" : "Return the mmt-probe configuration. Local (default) returns ACAS's config file; pass hostId to return the config the edge agent is currently using.",
+        "operationId" : "getProbeConfig",
+        "parameters" : [ {
+          "name" : "hostId",
+          "in" : "query",
+          "description" : "Edge host id; omit or 'local' for the ACAS machine.",
+          "schema" : { "type" : "string" }
+        } ],
+        "responses" : {
+          "200" : { "description" : "Config returned ({ ok, hostId, path, config })" },
+          "404" : { "description" : "Unknown host" },
+          "502" : { "description" : "Edge unreachable" }
+        }
+      },
+      "put" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Edit the mmt-probe config",
+        "description" : "Replace the mmt-probe configuration. Local writes ACAS's config file (the previous one is backed up to *.bak); pass hostId to push it to that edge. Takes effect on the next monitoring session.",
+        "operationId" : "updateProbeConfig",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "required" : [ "config" ],
+                "properties" : {
+                  "config" : { "type" : "string", "description" : "Full mmt-probe config file contents." },
+                  "hostId" : { "type" : "string", "description" : "Edge host id; omit or 'local' for the ACAS machine." }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : { "description" : "Config updated" },
+          "400" : { "description" : "config (non-empty string) is required" },
+          "404" : { "description" : "Unknown host" },
+          "502" : { "description" : "Edge unreachable" }
+        }
+      }
+    },
+    "/mmt/hosts" : {
+      "get" : {
+        "tags" : [ "mmt" ],
+        "summary" : "List registered edge hosts",
+        "description" : "List remote MMT edge hosts. Bearer tokens are never returned.",
+        "operationId" : "listEdgeHosts",
+        "responses" : {
+          "200" : { "description" : "List of hosts" }
+        }
+      },
+      "post" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Register an edge host",
+        "description" : "Register a remote MMT host. Provide an ssh block and set provision:true to register AND deploy in one call (SSH in, build the agent image, run the container, sync rules + probe config). The agent's bearer token is generated and stored internally and injected into the agent during provisioning over SSH — it is never returned to the caller.",
+        "operationId" : "addEdgeHost",
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "required" : [ "host" ],
+                "properties" : {
+                  "name" : { "type" : "string" },
+                  "host" : { "type" : "string", "example" : "192.168.56.20" },
+                  "port" : { "type" : "integer", "example" : 8443 },
+                  "tls" : { "type" : "boolean", "example" : true },
+                  "insecureTLS" : { "type" : "boolean", "description" : "Skip TLS cert verification (self-signed cert / trusted LAN). Defaults to true when ssh is provided.", "example" : true },
+                  "ssh" : {
+                    "type" : "object",
+                    "description" : "SSH credentials for automatic provisioning. Provide a privateKey (or keyPath) or a password.",
+                    "properties" : {
+                      "user" : { "type" : "string", "example" : "ubuntu" },
+                      "port" : { "type" : "integer", "example" : 22 },
+                      "privateKey" : { "type" : "string", "description" : "PEM private key contents." },
+                      "keyPath" : { "type" : "string", "description" : "Path to a private key file on the ACAS host." },
+                      "passphrase" : { "type" : "string" },
+                      "password" : { "type" : "string" },
+                      "sudo" : { "type" : "boolean", "description" : "Prefix docker commands with sudo on the edge.", "example" : false }
+                    }
+                  },
+                  "provision" : { "type" : "boolean", "description" : "If true (and ssh is given), register AND provision in this one call: SSH in, build the image, run the agent, seed rules.", "example" : true }
+                }
+              },
+              "example" : {
+                "name" : "edge",
+                "host" : "192.168.56.3",
+                "ssh" : { "user" : "user", "keyPath" : "/home/user/.ssh/id_rsa" },
+                "provision" : true
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : { "description" : "Host registered. With provision:true also returns the provisioning summary; otherwise returns nextStep." },
+          "400" : { "description" : "host is required" }
+        }
+      }
+    },
+    "/mmt/hosts/{id}" : {
+      "put" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Update an edge host",
+        "description" : "Patch mutable fields (name/host/port/tls/insecureTLS/ssh). Only provided fields change; passing ssh replaces the whole ssh block.",
+        "operationId" : "updateEdgeHost",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "name" : { "type" : "string" },
+                  "host" : { "type" : "string" },
+                  "port" : { "type" : "integer", "example" : 8443 },
+                  "tls" : { "type" : "boolean" },
+                  "insecureTLS" : { "type" : "boolean" },
+                  "ssh" : {
+                    "type" : "object",
+                    "properties" : {
+                      "user" : { "type" : "string", "example" : "strongcourage" },
+                      "port" : { "type" : "integer", "example" : 22 },
+                      "privateKey" : { "type" : "string" },
+                      "keyPath" : { "type" : "string", "example" : "/home/strongcourage/.ssh/acas_edge" },
+                      "passphrase" : { "type" : "string" },
+                      "password" : { "type" : "string" },
+                      "sudo" : { "type" : "boolean" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : { "description" : "Updated" },
+          "404" : { "description" : "Host not found" }
+        }
+      },
+      "delete" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Remove an edge host",
+        "description" : "Remove the host registration from ACAS. Does not tear down the agent container on the edge — use deprovision first if you want to stop it.",
+        "operationId" : "deleteEdgeHost",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "responses" : {
+          "200" : { "description" : "Removed" },
+          "404" : { "description" : "Host not found" }
+        }
+      }
+    },
+    "/mmt/hosts/{id}/provision" : {
+      "post" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Provision the agent on an edge over SSH",
+        "description" : "One-step deploy: SSHes into the host, ensures Docker, builds the mmt-agent image (MMT baked into a pinned Ubuntu 20.04 base), runs the container with the bearer token injected, verifies /health, and syncs ACAS's rules + mmt-probe config to the edge. Requires SSH credentials on the host record.",
+        "operationId" : "provisionEdge",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "responses" : {
+          "200" : { "description" : "Provisioning summary (dockerInstalled, built, started, health)" },
+          "404" : { "description" : "Host not found" },
+          "500" : { "description" : "Provisioning failed (no SSH creds, SSH/build/run error)" }
+        }
+      }
+    },
+    "/mmt/hosts/{id}/deprovision" : {
+      "post" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Tear down the agent container on an edge",
+        "description" : "Removes the mmt-agent container on the edge over SSH. Keeps the host registration.",
+        "operationId" : "deprovisionEdge",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "responses" : {
+          "200" : { "description" : "Container removed" },
+          "404" : { "description" : "Host not found" },
+          "500" : { "description" : "Deprovision failed" }
+        }
+      }
+    },
+    "/mmt/hosts/{id}/health" : {
+      "get" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Check an edge host's health",
+        "description" : "Calls the agent's /health and caches reported tool versions.",
+        "operationId" : "edgeHostHealth",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "responses" : {
+          "200" : { "description" : "Health + versions" },
+          "404" : { "description" : "Host not found" },
+          "502" : { "description" : "Edge unreachable" }
+        }
+      }
+    },
+    "/mmt/hosts/{id}/interfaces" : {
+      "get" : {
+        "tags" : [ "mmt" ],
+        "summary" : "List an edge host's NICs",
+        "description" : "List the network interfaces on the edge (via the agent), for choosing which one to monitor.",
+        "operationId" : "edgeHostInterfaces",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "responses" : {
+          "200" : { "description" : "List of interfaces" },
+          "404" : { "description" : "Host not found" }
+        }
+      }
+    },
+    "/mmt/hosts/{id}/sync-rules" : {
+      "post" : {
+        "tags" : [ "mmt" ],
+        "summary" : "Sync ACAS rules + probe config to an edge host",
+        "description" : "Re-sends the current ACAS rule XML set (the edge recompiles and uses it over the deb defaults) and the mmt-probe config (so the edge's feature CSVs match what the model expects). No image rebuild needed — the agent picks both up on the next session.",
+        "operationId" : "syncEdgeRules",
+        "parameters" : [ { "name" : "id", "in" : "path", "required" : true, "schema" : { "type" : "string" } } ],
+        "responses" : {
+          "200" : { "description" : "Sync result (compiled/failed counts)" },
+          "404" : { "description" : "Host not found" },
+          "502" : { "description" : "Edge unreachable" }
         }
       }
     },
@@ -1439,7 +1682,7 @@
                       "type" : "array",
                       "items" : {
                         "type" : "string",
-                        "example" : "enp0s1"
+                        "example" : "enp0s3"
                       }
                     }
                   }
@@ -1561,7 +1804,7 @@
       "post" : {
         "tags" : [ "predictions" ],
         "summary" : "Start integrated online prediction with MMT-probe",
-        "description" : "Start real-time AI-based intrusion detection on a network interface. This endpoint combines MMT-probe packet capture, DPI analysis, feature extraction, and AI prediction in one integrated pipeline.",
+        "description" : "Start real-time AI-based intrusion detection on a network interface (MMT-probe capture + feature extraction + AI prediction). Runs on the ACAS machine by default; pass hostId of a registered edge to capture features on that edge — ACAS pulls the feature CSVs and runs the model centrally.",
         "operationId" : "startOnlinePrediction",
         "requestBody" : {
           "required" : true,
@@ -1578,14 +1821,20 @@
                   },
                   "interface" : {
                     "type" : "string",
-                    "description" : "Network interface to monitor (e.g., eth0, lo)",
-                    "example" : "eth0"
+                    "description" : "Network interface to monitor (on the ACAS machine, or on the edge if hostId is set)",
+                    "example" : "enp0s3"
+                  },
+                  "hostId" : {
+                    "type" : "string",
+                    "description" : "Registered edge host id; omit or 'local' for the ACAS machine.",
+                    "example" : "local"
                   }
                 }
               },
               "example" : {
                 "modelId" : "model_1",
-                "interface" : "eth0"
+                "interface" : "enp0s3",
+                "hostId" : "local"
               }
             }
           }
@@ -1653,8 +1902,20 @@
       "post" : {
         "tags" : [ "predictions" ],
         "summary" : "Stop online prediction",
-        "description" : "Stop the running online prediction and MMT-probe",
+        "description" : "Stop a running online prediction. Pass sessionId (returned by /predict/online) to stop one specific session; omit it to stop all online predictions. For a single session, omitting it stops that one.",
         "operationId" : "stopOnlinePrediction",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "sessionId" : { "type" : "string", "description" : "Capture session id to stop (from /predict/online). Omit to stop all." }
+                }
+              }
+            }
+          }
+        },
         "responses" : {
           "200" : {
             "description" : "Online prediction stopped successfully",
@@ -2044,7 +2305,7 @@
       "get" : {
         "tags" : [ "security" ],
         "summary" : "Get rule-based alerts",
-        "description" : "Get security alerts from rule-based detection",
+        "description" : "Get security alerts from rule-based detection. Pass the sessionId returned by /online/start (works for both local and remote-edge sessions; remote alerts are pulled from the edge into the session's report dir).",
         "operationId" : "getRuleBasedAlerts",
         "parameters" : [ {
           "name" : "sessionId",
@@ -2070,7 +2331,7 @@
       "post" : {
         "tags" : [ "security" ],
         "summary" : "Start online rule-based detection",
-        "description" : "Start real-time rule-based intrusion detection",
+        "description" : "Start real-time rule-based intrusion detection. Runs on the ACAS machine by default; pass hostId of a registered edge to run mmt_security on that edge (ACAS pulls the alerts back). The returned sessionId is then used with /security/rule-based/alerts and /stop.",
         "operationId" : "startRuleBasedOnline",
         "requestBody" : {
           "content" : {
@@ -2078,18 +2339,20 @@
               "schema" : {
                 "type" : "object",
                 "properties" : {
-                  "iface" : {"type" : "string"},
+                  "interface" : {"type" : "string", "description" : "Network interface to monitor (on the ACAS machine, or on the edge if hostId is set)."},
                   "intervalSec" : {"type" : "number"},
                   "verbose" : {"type" : "boolean"},
                   "excludeRules" : {"type" : "array", "items" : {"type" : "string"}},
-                  "cores" : {"type" : "number"}
+                  "cores" : {"type" : "number"},
+                  "hostId" : {"type" : "string", "description" : "Registered edge host id; omit or 'local' for the ACAS machine."}
                 }
               },
               "example" : {
-                "iface" : "eth0",
+                "interface" : "enp0s3",
+                "hostId" : "local",
                 "intervalSec" : 5,
                 "verbose" : true,
-                "excludeRules" : [""],
+                "excludeRules" : [ "" ],
                 "cores" : 1
               }
             }
@@ -2097,7 +2360,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "Successfully started"
+            "description" : "Successfully started (returns sessionId; remote sessions also return hostId)"
           }
         }
       }
@@ -2106,8 +2369,21 @@
       "post" : {
         "tags" : [ "security" ],
         "summary" : "Stop online rule-based detection",
-        "description" : "Stop real-time rule-based intrusion detection",
+        "description" : "Stop real-time rule-based intrusion detection. For a remote edge session, pass hostId and sessionId.",
         "operationId" : "stopRuleBasedOnline",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "hostId" : {"type" : "string", "description" : "Edge host id; omit for a local session."},
+                  "sessionId" : {"type" : "string", "description" : "Remote session id to stop."}
+                }
+              }
+            }
+          }
+        },
         "responses" : {
           "200" : {
             "description" : "Successfully stopped"

@@ -17,6 +17,7 @@ const {
 const { LOCAL_NATS_URL, TRAINING_PATH, REPORT_PATH, PCAP_PATH } = require('../constants');
 const { identifyUser } = require('../middleware/userAuth');
 const ruleManager = require('../utils/ruleManager');
+const probeService = require('../mmt/probeService');
 // Compile any rules whose .so is missing (idempotent); safe to call on boot.
 ruleManager.bootstrap().catch(e => console.error('[ruleManager] bootstrap error:', e.message));
 const { resolvePcapPath } = require('../utils/pcapResolver');
@@ -113,14 +114,58 @@ function resolveSecurityBin() {
 function findLatestSecurityCsv(dir) {
   try {
     if (!dir || !fs.existsSync(dir)) return null;
-    const files = fs.readdirSync(dir)
-      .filter(f => f.endsWith('.csv'))
+    const all = fs.readdirSync(dir).filter(f => f.endsWith('.csv'));
+    // mmt_security alert files are named "sec-*.csv". Prefer those so a shared
+    // dir (e.g. a remote session running engine "both") never returns a
+    // mmt-probe "*_data.csv" feature file by mistake. Fall back to any .csv.
+    const secFiles = all.filter(f => f.startsWith('sec-'));
+    const candidates = secFiles.length > 0 ? secFiles : all;
+    const files = candidates
       .map(f => ({ f, full: path.join(dir, f), st: fs.statSync(path.join(dir, f)) }))
       .sort((a, b) => b.st.mtimeMs - a.st.mtimeMs);
     return files.length > 0 ? files[0].full : null;
   } catch (e) {
     return null;
   }
+}
+
+// Summarise a security alert CSV as [{ rule, verdicts }], mirroring the
+// ruleVerdicts the local online flow derives from mmt_security's stdout. Used to
+// give remote (edge) sessions the same response shape as local ones.
+function ruleVerdictsFromFile(file) {
+  if (!file) return [];
+  const counts = new Map();
+  for (const a of parseSecurityCsv(file, 1000000)) {
+    if (a && a.code != null) counts.set(a.code, (counts.get(a.code) || 0) + 1);
+  }
+  return [...counts.entries()].map(([rule, verdicts]) => ({ rule, verdicts })).sort((a, b) => a.rule - b.rule);
+}
+
+/**
+ * Aggregate a session's alerts across ALL its sec-*.csv files.
+ *
+ * Each session has its own output dir, created fresh at start, so every
+ * sec-*.csv in it belongs to this session — the folder IS the session boundary
+ * (no timestamp filtering needed). We read every file in chronological order,
+ * combine, dedupe, and return up to `limit` (the most recent). A single file is
+ * just a one-element aggregate — still valid.
+ */
+const NO_LIMIT = 10_000_000; // per-file read cap (files are per-interval, far smaller)
+
+function collectSessionAlerts(dir, limit = 500) {
+  if (!dir || !fs.existsSync(dir)) return { alerts: [], files: [] };
+  const all = fs.readdirSync(dir).filter(f => f.endsWith('.csv'));
+  // Prefer sec-*.csv (alert files); fall back to any .csv for legacy dirs.
+  let secFiles = all.filter(f => f.startsWith('sec-'));
+  if (secFiles.length === 0) secFiles = all;
+  const ordered = secFiles
+    .map(f => { const full = path.join(dir, f); return { f, full, mt: fs.statSync(full).mtimeMs }; })
+    .sort((a, b) => a.mt - b.mt); // oldest first → chronological
+
+  const combined = [];
+  for (const { full } of ordered) combined.push(...parseSecurityCsv(full, NO_LIMIT));
+  const deduped = dedupeAlerts(combined);
+  return { alerts: deduped.slice(-limit), files: ordered.map(o => o.f) };
 }
 
 function parseSecurityCsvLine(line) {
@@ -287,25 +332,23 @@ router.get('/rule-based/alerts', async (req, res) => {
     const { sessionId, limit: limitParam } = req.query;
     const limit = limitParam ? Number(limitParam) : 500;
 
-    let file, outputDir;
+    let outputDir;
     if (sessionId) {
-      // Get alerts for specific session
+      // Get alerts for a specific session (local or remote edge)
       const session = sessionManager.getSession('attacks', sessionId);
       if (!session) {
         return res.status(404).json({ error: 'Session not found', sessionId });
       }
-      file = session.outputFile || findLatestSecurityCsv(session.outputDir);
       outputDir = session.outputDir;
     } else {
       // Legacy: use global secState
-      file = secState.outputFile || findLatestSecurityCsv(secState.outputDir);
       outputDir = secState.outputDir;
     }
 
-    if (!file) return res.send({ ok: true, alerts: [] });
-    const alerts = parseSecurityCsv(file, limit);
-    const uniqueAlerts = dedupeAlerts(alerts);
-    res.send({ ok: true, file, count: uniqueAlerts.length, alerts: uniqueAlerts });
+    // Aggregate across all of the session's sec-*.csv files (covers the whole
+    // session, not just the latest rotated file).
+    const { alerts, files } = collectSessionAlerts(outputDir, limit);
+    res.send({ ok: true, files, count: alerts.length, alerts });
   } catch (e) {
     res.status(500).send(e.message || 'Failed to read alerts');
   }
@@ -367,10 +410,40 @@ router.delete('/rule-based/rules/:id', async (req, res) => {
 
 router.post('/rule-based/online/start', async (req, res) => {
   try {
-    const { iface, intervalSec = 5, verbose = true, excludeRules, cores } = req.body || {};
-    if (!iface) return res.status(400).send('Missing iface');
+    const { interface: ifaceParam, iface: ifaceLegacy, intervalSec = 5, verbose = true, excludeRules, cores, hostId } = req.body || {};
+    const iface = ifaceParam || ifaceLegacy; // accept "interface" (consistent with /predict/online); "iface" kept for compatibility
+    if (!iface) return res.status(400).send('Missing interface');
 
-    // Check if online rule-based detection is already running
+    // Remote edge: capture runs on the agent (engine "security"); ACAS pulls the
+    // sec-*.csv alerts into report-<sessionId>/. Register the session so the
+    // existing /rule-based/alerts and /stop paths resolve it.
+    if (hostId && hostId !== 'local') {
+      // Forward the same rule-based tuning the local path uses, so edge sessions
+      // honour intervalSec/verbose/excludeRules/cores too.
+      const excludeMask = normalizeExcludeRules(excludeRules);
+      const r = await probeService.startOnline({
+        hostId,
+        netInf: iface,
+        engine: 'security',
+        options: { intervalSec, verbose, excludeMask, cores },
+      });
+      if (r.error) return res.status(400).json({ error: r.error });
+      const outputDir = path.join(REPORT_PATH, `report-${r.sessionId}`);
+      const startedAt = new Date().toISOString();
+      sessionManager.createSession('attacks', r.sessionId, 'online', {
+        outputDir, remote: true, hostId, iface, startedAt, intervalSec,
+      });
+      // Same shape as a local start so the GUI can treat both uniformly.
+      return res.json({
+        ok: true, running: true, mode: 'online', remote: true,
+        pid: null, child: null, iface, pcapFile: null,
+        outputDir, outputFile: null, startedAt, intervalSec,
+        ruleVerdicts: [], hostId, sessionId: r.sessionId,
+        message: `Remote rule-based detection started on edge ${hostId} (${iface})`,
+      });
+    }
+
+    // Check if online rule-based detection is already running (local)
     if (secState.running && secState.mode === 'online') {
       return res.status(409).json({
         error: 'Online rule-based detection already running',
@@ -505,6 +578,32 @@ router.post('/rule-based/online/start', async (req, res) => {
 
 router.post('/rule-based/online/stop', async (req, res) => {
   try {
+    const { hostId, sessionId } = req.body || {};
+
+    // Remote edge session: stop the agent's capture and the report puller, then
+    // return the same shape as a local stop (the puller's final drain has run, so
+    // the latest pulled alerts are available for outputFile/ruleVerdicts).
+    if (hostId && hostId !== 'local') {
+      const r = await probeService.stop({ hostId, sessionId });
+      if (r.error) return res.status(400).json({ error: r.error });
+      const session = sessionId ? sessionManager.getSession('attacks', sessionId) : null;
+      const outputDir = session ? session.outputDir : null;
+      const outputFile = findLatestSecurityCsv(outputDir);
+      if (sessionId) sessionManager.updateSession('attacks', sessionId, { isRunning: false, outputFile });
+      return res.json({
+        ok: true, stopped: true, running: false, mode: 'online', remote: true,
+        pid: null, child: null,
+        iface: session ? session.iface : null,
+        pcapFile: null,
+        outputDir,
+        outputFile,
+        startedAt: session ? session.startedAt : null,
+        intervalSec: session ? session.intervalSec : null,
+        ruleVerdicts: ruleVerdictsFromFile(outputFile),
+        hostId, sessionId,
+      });
+    }
+
     if (!secState.running) return res.send({ ok: true, stopped: false });
 
     const stoppedPid = secState.pid;

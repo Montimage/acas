@@ -12,6 +12,7 @@ const {
   PYTHON_CMD,
 } = require('../constants');
 const { startMMTOnline, stopMMT } = require('../mmt/mmt-connector');
+const probeService = require('../mmt/probeService');
 const {
   isFileExist,
   isFileExistSync,
@@ -44,11 +45,23 @@ const buildingStatus = {
  * Use predictionSessionManager instead for multi-user support
  */
 const predictingStatus = {
-  isRunning: false, // indicate if the predicting process is ongoing
+  isRunning: false, // indicate if ANY online prediction is ongoing (summary for /status)
   lastPredictedAt: null, // indicate the time started time of the last prediction
   lastPredictedId: null, // indicate the last prediction id -> to get the result
   config: null, // the configuration of the last prediction
 };
+
+/**
+ * Active online predictions, keyed by capture sessionId, so multiple can run
+ * concurrently (e.g. several edges, or local + edge). Each watcher loop checks
+ * its OWN running flag; stop targets a single session. The global
+ * predictingStatus above is kept as a summary for the legacy /status endpoint.
+ *   sessionId -> { running: boolean, remote: { hostId, sessionId } | null }
+ */
+const onlinePredictions = new Map();
+const isOnlineRunning = (sessionId) => (
+  sessionId != null ? Boolean(onlinePredictions.get(sessionId)?.running) : predictingStatus.isRunning
+);
 
 /**
  * The retrain status
@@ -281,12 +294,29 @@ const retrainModel = (retrainConfig, callback) => {
 /**
  * Stop an online prediction
  */
-const stopOnlinePrediction = (callback) => {
-  console.log('Going to stop online prediction');
-  stopMMT(() => {
-    predictingStatus.isRunning = false;
-    return callback(predictingStatus);
-  });
+/**
+ * Stop online prediction. With a sessionId, stops just that session; without
+ * one, stops all active online sessions (backward-compatible single-session
+ * behaviour). Each watcher exits on its own once its running flag is cleared.
+ */
+const stopOnlinePrediction = (callback, sessionId = null) => {
+  console.log('Going to stop online prediction', sessionId || '(all)');
+  const ids = sessionId ? [sessionId] : [...onlinePredictions.keys()];
+  let hadLocal = false;
+  const remoteStops = [];
+  for (const id of ids) {
+    const entry = onlinePredictions.get(id);
+    if (!entry) continue;
+    entry.running = false;            // the session's watcher loop will exit
+    onlinePredictions.delete(id);
+    if (entry.remote) remoteStops.push(probeService.stop(entry.remote).catch(() => {}));
+    else hadLocal = true;             // local capture → stop the local mmt-probe
+  }
+  // Summary status reflects whether anything is still running.
+  predictingStatus.isRunning = onlinePredictions.size > 0;
+  const finish = () => Promise.all(remoteStops).then(() => callback(predictingStatus));
+  if (hadLocal) stopMMT(finish);
+  else finish();
 };
 
 /**
@@ -355,68 +385,82 @@ const executePrediction = (csvPath, modelPath, predictionPath, logPath, onComple
  * @param {String} logPath Path to the log of what's going on with the prediction process
  * @param {Number} currentIndex The index of the report is going to be processed
  */
-const startOnlinePrediction = (reportPath, modelPath, predictionPath, logPath, currentIndex, waitCount = 0) => {
-  if (!predictingStatus.isRunning) {
+const startOnlinePrediction = (reportPath, modelPath, predictionPath, logPath, currentIndex, sessionId, waitCount = 0) => {
+  if (!isOnlineRunning(sessionId)) {
     console.log('The online prediction process has been terminated');
     return;
   }
-  
+
   // First call for this index
   if (waitCount === 0) {
     console.log(`startOnlinePrediction: ${currentIndex}`);
   }
-  
-  let allCSVFiles = listFilesByTypeAsync(reportPath, '.csv');
+
+  // Only mmt-probe feature reports ("*_data.csv") are model inputs. Exclude
+  // other reports the probe config emits (e.g. security-reports.csv), which
+  // would otherwise stall the watcher waiting for a .sem that never comes.
+  let allCSVFiles = listFilesByTypeAsync(reportPath, '.csv').filter((f) => f.endsWith('_data.csv'));
   let currentReport = allCSVFiles[currentIndex];
-  
+
   // If CSV file doesn't exist yet, wait and retry
   if (!currentReport) {
     waitCount++;
     // Use setTimeout to avoid blocking the event loop (no logging during wait)
     setTimeout(() => {
-      startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex, waitCount);
+      startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex, sessionId, waitCount);
     }, 1000);
     return;
   }
 
   // CSV exists, now check for .sem file
-  checkForSemFile(reportPath, modelPath, predictionPath, logPath, currentIndex, currentReport, 0);
+  checkForSemFile(reportPath, modelPath, predictionPath, logPath, currentIndex, currentReport, sessionId, 0);
 };
 
-const checkForSemFile = (reportPath, modelPath, predictionPath, logPath, currentIndex, currentReport, semWaitCount) => {
-  if (!predictingStatus.isRunning) {
+const checkForSemFile = (reportPath, modelPath, predictionPath, logPath, currentIndex, currentReport, sessionId, semWaitCount) => {
+  if (!isOnlineRunning(sessionId)) {
     console.log('The online prediction process has been terminated');
     return;
   }
-  
+
   const allSEMFiles = listFilesByTypeAsync(reportPath, '.sem');
   const currentSemFile = `${currentReport}.sem`;
-  
-  // If .sem file doesn't exist yet, wait and retry
+
+  // If .sem file doesn't exist yet, decide whether to wait or skip immediately.
   if (allSEMFiles.indexOf(currentSemFile) === -1) {
+    // Fast path: an already-empty CSV (header/metadata only) will never produce
+    // useful predictions, and mmt-probe doesn't emit a .sem for empty windows.
+    // Skip it now instead of stalling the whole sequential pipeline.
+    try {
+      const lines = fs.readFileSync(`${reportPath}/${currentReport}`, 'utf8').trim().split('\n')
+        .filter(l => l.trim().length > 0 && !l.startsWith('#'));
+      if (lines.length < 3) {
+        startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex + 1, sessionId);
+        return;
+      }
+    } catch (e) { /* file not readable yet — fall through to wait */ }
+
     semWaitCount++;
-    
-    // Timeout after 120 attempts (60 seconds) - skip this CSV and move to next
-    if (semWaitCount >= 120) {
+    // Timeout: the report puller polls every ~3s, so a real .sem arrives within
+    // ~6-9s. 30 attempts x 500ms = 15s gives margin without stalling 60s/file.
+    if (semWaitCount >= 30) {
       console.log(`⚠️  Timeout waiting for .sem file: ${currentSemFile} - skipping`);
-      // Skip this report and move to next
-      startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex + 1);
+      startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex + 1, sessionId);
       return;
     }
-    
+
     // Use setTimeout to avoid blocking the event loop (no logging during wait)
     setTimeout(() => {
-      checkForSemFile(reportPath, modelPath, predictionPath, logPath, currentIndex, currentReport, semWaitCount);
+      checkForSemFile(reportPath, modelPath, predictionPath, logPath, currentIndex, currentReport, sessionId, semWaitCount);
     }, 500);
     return;
   }
-  
+
   // Both CSV and .sem exist, execute prediction using common function
   const csvPath = `${reportPath}/${currentReport}`;
-  
+
   executePrediction(csvPath, modelPath, predictionPath, logPath, (exitCode) => {
     // Process next report regardless of success/failure/skip
-    startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex + 1);
+    startOnlinePrediction(reportPath, modelPath, predictionPath, logPath, currentIndex + 1, sessionId);
   });
 };
 
@@ -519,9 +563,43 @@ const startPredicting = async (predictConfig, callback) => {
           });
           break;
         case 'online':
-          // Start MMTOnline
+          // Start MMTOnline (local) or capture on a remote edge (hostId).
           // eslint-disable-next-line no-case-declarations
           const netInf = value.netInf || value;
+          // eslint-disable-next-line no-case-declarations
+          const onlineHostId = value.hostId;
+          predictingStatus.remote = null;
+          if (onlineHostId && onlineHostId !== 'local') {
+            // Remote edge: capture features on the edge via the agent, pull them
+            // to report-<sessionId>/, then run the SAME prediction watcher on ACAS.
+            probeService.startOnline({ hostId: onlineHostId, netInf, engine: 'probe' })
+              .then((r) => {
+                if (r.error) {
+                  callback({ error: r.error, details: 'Edge mmt-probe failed to start for online capture' });
+                  return;
+                }
+                value.sessionId = r.sessionId; // expose the capture session id in status/response
+                const session = sessionManager.createSession('prediction', predictionId, 'online', { config: predictConfig });
+                const csvRootPath = `${REPORT_PATH}/report-${r.sessionId}`;
+                // Register this online session (keyed by capture sessionId) so its
+                // watcher runs independently of any other concurrent session.
+                onlinePredictions.set(r.sessionId, { running: true, remote: { hostId: onlineHostId, sessionId: r.sessionId } });
+                predictingStatus.isRunning = true;
+                predictingStatus.lastPredictedAt = session.createdAt;
+                predictingStatus.lastPredictedId = session.sessionId;
+                predictingStatus.config = session.config;
+                predictingStatus.remote = { hostId: onlineHostId, sessionId: r.sessionId };
+                callback({
+                  isRunning: session.isRunning,
+                  lastPredictedAt: session.createdAt,
+                  lastPredictedId: session.sessionId,
+                  config: session.config,
+                });
+                startOnlinePrediction(csvRootPath, modelPath, predictionPath, logFile, 0, r.sessionId);
+              })
+              .catch((e) => callback({ error: e.message || 'Failed to start remote online prediction' }));
+            break;
+          }
           startMMTOnline(netInf, (mmtStatus) => {
             console.log('MMTStatus:');
             // isRunning: true,
@@ -546,9 +624,13 @@ const startPredicting = async (predictConfig, callback) => {
               const session = sessionManager.createSession('prediction', predictionId, 'online', { config: predictConfig });
 
               const { sessionId } = mmtStatus;
+              value.sessionId = sessionId; // expose the capture session id in status/response
               const csvRootPath = `${REPORT_PATH}/report-${sessionId}`;
 
-              // Set global predictingStatus for backward compatibility with startOnlinePrediction loop
+              // Register this online session (local → remote: null). Keyed by the
+              // capture sessionId so its watcher runs independently.
+              onlinePredictions.set(sessionId, { running: true, remote: null });
+              // Update the summary status for the legacy /status endpoint.
               predictingStatus.isRunning = true;
               predictingStatus.lastPredictedAt = session.createdAt;
               predictingStatus.lastPredictedId = session.sessionId;
@@ -562,7 +644,7 @@ const startPredicting = async (predictConfig, callback) => {
                 config: session.config
               });
 
-              startOnlinePrediction(csvRootPath, modelPath, predictionPath, logFile, 0);
+              startOnlinePrediction(csvRootPath, modelPath, predictionPath, logFile, 0, sessionId);
             } else {
               // MMT didn't start and no explicit error - generic failure
               callback({

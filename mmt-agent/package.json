@@ -1,0 +1,16 @@
+{
+  "name": "mmt-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight agent that runs MMT (mmt-probe / mmt_security) on an edge host under ACAS control.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
