@@ -10,6 +10,9 @@ const {
   listFiles, readTextFile, isFileExist,
 } = require('../utils/file-utils');
 
+// Strip any directory components / traversal from a request param used in a path.
+const seg = (s) => path.basename(String(s || ''));
+
 router.get('/', (req, res, next) => {
   listFiles(LOG_PATH, '.log', (files) => {
     res.send({
@@ -38,7 +41,7 @@ router.delete('/', (req, res, next) => {
 
 router.get('/:fileName/download', (req, res, next) => {
   const { fileName } = req.params;
-  const logFilePath = `${LOG_PATH}${fileName}`;
+  const logFilePath = `${LOG_PATH}${seg(fileName)}`;
   isFileExist(logFilePath, (ret) => {
     if (!ret) {
       res.status(401).send(`The log file ${fileName} does not exist`);
@@ -50,7 +53,7 @@ router.get('/:fileName/download', (req, res, next) => {
 
 router.get('/:fileName', (req, res, next) => {
   const { fileName } = req.params;
-  readTextFile(`${LOG_PATH}${fileName}`, (err, content) => {
+  readTextFile(`${LOG_PATH}${seg(fileName)}`, (err, content) => {
     if (err) {
       res.status(401).send({ error: 'Something went wrong!' });
     } else {

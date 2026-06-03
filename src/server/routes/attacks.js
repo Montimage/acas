@@ -22,6 +22,9 @@ const {
   replaceDelimiterInCsv
 } = require('../utils/utils');
 
+// Strip any directory components / traversal from a request param used in a path.
+const seg = (s) => path.basename(String(s || ''));
+
 router.get('/', (_, res) => {
   res.send({
     attacksStatus: getAttacksStatus(),
@@ -31,7 +34,7 @@ router.get('/', (_, res) => {
 router.get('/:modelId/datasets', async (req, res, next) => {
   const { modelId } = req.params;
   try {
-    const datasetsPath = path.join(ATTACKS_PATH, modelId.replace('.h5', ''));
+    const datasetsPath = path.join(ATTACKS_PATH, seg(modelId).replace('.h5', ''));
     if (!fs.existsSync(datasetsPath)) {
       return res.send({ datasets: [] });
     }
@@ -49,7 +52,7 @@ router.get('/:modelId/datasets', async (req, res, next) => {
 
 router.delete('/:modelId/datasets', async (req, res, next) => {
   const { modelId } = req.params;
-  const poisonedDatasetsPath = path.join(ATTACKS_PATH, modelId.replace('.h5', ''));
+  const poisonedDatasetsPath = path.join(ATTACKS_PATH, seg(modelId).replace('.h5', ''));
   try {
     listFiles(poisonedDatasetsPath, '.csv', (files) => {
       files.forEach(file => {
@@ -98,7 +101,7 @@ router.post('/ctgan', (req, res) => {
 
 router.get('/ctgan/:modelId/download', (req, res, next) => {
   const { modelId } = req.params;
-  const ctganFilePath = `${ATTACKS_PATH}${modelId.replace('.h5', '')}/ctgan_samples.csv`;
+  const ctganFilePath = `${ATTACKS_PATH}${seg(modelId).replace('.h5', '')}/ctgan_samples.csv`;
   isFileExist(ctganFilePath, (ret) => {
     if (!ret) {
       res.status(401).send(`The CTGAN dataset ${ctganFilePath} does not exist`);
@@ -159,7 +162,7 @@ router.get('/poisoning/:typeAttack/:modelId/download', (req, res, next) => {
     modelId,
   } = req.params;
 
-  const poisonedDatasetPath = `${ATTACKS_PATH}${modelId.replace('.h5', '')}/${typeAttack}_poisoned_dataset.csv`;
+  const poisonedDatasetPath = `${ATTACKS_PATH}${seg(modelId).replace('.h5', '')}/${seg(typeAttack)}_poisoned_dataset.csv`;
 
   isFileExist(poisonedDatasetPath, (ret) => {
     if (!ret) {
@@ -173,8 +176,8 @@ router.get('/poisoning/:typeAttack/:modelId/download', (req, res, next) => {
 router.get('/poisoning/:typeAttack/:modelId/view', (req, res, next) => {
   const { typeAttack, modelId } = req.params;
 
-  const poisonedDatasetPath = `${ATTACKS_PATH}${modelId.replace('.h5', '')}/${typeAttack}_poisoned_dataset.csv`;
-  const poisonedDatasetToViewPath = `${ATTACKS_PATH}${modelId.replace('.h5', '')}/${typeAttack}_poisoned_dataset_view.csv`;
+  const poisonedDatasetPath = `${ATTACKS_PATH}${seg(modelId).replace('.h5', '')}/${seg(typeAttack)}_poisoned_dataset.csv`;
+  const poisonedDatasetToViewPath = `${ATTACKS_PATH}${seg(modelId).replace('.h5', '')}/${seg(typeAttack)}_poisoned_dataset_view.csv`;
   
   if (!fs.existsSync(poisonedDatasetPath)) {
     return res.status(404).send(`The poisoned dataset of model ${modelId} does not exist`);

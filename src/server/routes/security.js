@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { connect, StringCodec } = require('nats');
 const readline = require('readline');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -452,6 +452,22 @@ router.post('/rule-based/online/start', async (req, res) => {
     const iface = ifaceParam || ifaceLegacy; // accept "interface" (consistent with /predict/online); "iface" kept for compatibility
     if (!iface) return res.status(400).send('Missing interface');
 
+    // Validate every value that reaches the mmt_security command line, to prevent
+    // OS command injection (these flow into args / the spawned process).
+    if (!/^[A-Za-z0-9_.:-]{1,32}$/.test(String(iface))) {
+      return res.status(400).send('Invalid interface name');
+    }
+    if (cores != null && cores !== '' && !(Number.isInteger(Number(cores)) && Number(cores) > 0 && Number(cores) <= 1024)) {
+      return res.status(400).send('Invalid cores (must be a positive integer)');
+    }
+    if (intervalSec != null && intervalSec !== '' && !(Number(intervalSec) > 0 && Number(intervalSec) <= 86400)) {
+      return res.status(400).send('Invalid intervalSec (must be a positive number)');
+    }
+    const excludeMaskChecked = normalizeExcludeRules(excludeRules);
+    if (excludeMaskChecked && !/^[0-9,]{1,256}$/.test(excludeMaskChecked)) {
+      return res.status(400).send('Invalid excludeRules (rule ids only)');
+    }
+
     // Remote edge: capture runs on the agent (engine "security"); ACAS pulls the
     // sec-*.csv alerts into report-<sessionId>/. Register the session so the
     // existing /rule-based/alerts and /stop paths resolve it.
@@ -521,11 +537,14 @@ router.post('/rule-based/online/start', async (req, res) => {
     // ensure trailing slash and include rotation interval so files are created under the run folder
     args.push('-f', `${runDir}/:${Number(intervalSec)}`);
 
-    const cmd = `${SUDO}${bin} ${args.map(a => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`;
-    console.log('[SECURITY][rule-based][online] Executing:', cmd);
-
-    // Spawn via bash so sudo can prompt non-interactively (assume configured). We do not pipe stdin.
-    const child = spawn('bash', ['-lc', cmd], { stdio: ['ignore', 'pipe', 'pipe'], cwd: ruleManager.WORKSPACE });
+    // Spawn with an argv array (NO shell) so user-supplied values (iface, cores,
+    // excludeRules) can never be interpreted as shell syntax — prevents OS command
+    // injection. sudo -n stays non-interactive without a shell.
+    const useSudo = SUDO.trim().length > 0;
+    const spawnCmd = useSudo ? 'sudo' : bin;
+    const spawnArgs = useSudo ? ['-n', bin, ...args] : args;
+    console.log('[SECURITY][rule-based][online] Executing:', spawnCmd, spawnArgs.join(' '));
+    const child = spawn(spawnCmd, spawnArgs, { stdio: ['ignore', 'pipe', 'pipe'], cwd: ruleManager.WORKSPACE });
     const verdictMap = new Map();
     let combinedLog = '';
     const parseAndUpdate = (txt) => {
@@ -685,6 +704,14 @@ router.post('/rule-based/online/stop', async (req, res) => {
 router.post('/rule-based/offline', async (req, res) => {
   try {
     const { pcapFile, filePath, verbose = false, excludeRules, cores, useQueue } = req.body || {};
+    // Validate values that reach the mmt_security command line (injection guard).
+    if (cores != null && cores !== '' && !(Number.isInteger(Number(cores)) && Number(cores) > 0 && Number(cores) <= 1024)) {
+      return res.status(400).send('Invalid cores (must be a positive integer)');
+    }
+    const offlineMaskChecked = normalizeExcludeRules(excludeRules);
+    if (offlineMaskChecked && !/^[0-9,]{1,256}$/.test(offlineMaskChecked)) {
+      return res.status(400).send('Invalid excludeRules (rule ids only)');
+    }
     const userId = req.userId;
     let inputPath = null;
     if (filePath) {
@@ -833,8 +860,7 @@ router.post('/rule-based/offline', async (req, res) => {
     if (cores) args.push('-c', String(cores));
     args.push('-f', `${outDir}/`);
 
-    const cmd = `${bin} ${args.map(a => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`;
-    console.log('[SECURITY][rule-based][offline] Executing:', cmd);
+    console.log('[SECURITY][rule-based][offline] Executing:', bin, args.join(' '));
 
     // Create session in session manager
     sessionManager.createSession('attacks', sessionId, 'offline', {
@@ -848,7 +874,9 @@ router.post('/rule-based/offline', async (req, res) => {
       cores,
     });
 
-    exec(cmd, { cwd: ruleManager.WORKSPACE, maxBuffer: 200 * 1024 * 1024 }, (error, stdout, stderr) => {
+    // execFile (NO shell): args passed as a discrete argv array, so excludeRules/
+    // cores/pcap path can't be interpreted as shell syntax — prevents injection.
+    execFile(bin, args, { cwd: ruleManager.WORKSPACE, maxBuffer: 200 * 1024 * 1024 }, (error, stdout, stderr) => {
       // Always cleanup temporary converted file
       pcapPrep.cleanup();
 
@@ -1166,6 +1194,16 @@ router.post('/rate-limit', async (req, res) => {
     const p = Number(port);
     if (!p || p < 1 || p > 65535) return res.status(400).send('Invalid port');
     const proto = ['tcp', 'udp'].includes(String(protocol).toLowerCase()) ? String(protocol).toLowerCase() : 'tcp';
+    // Validate limit/burst — they reach the iptables command line (run as root).
+    if (!/^[0-9]{1,6}\/(sec|second|min|minute|hour)$/i.test(String(limit))) {
+      return res.status(400).send('Invalid limit (e.g. "5/sec")');
+    }
+    if (!(Number.isInteger(Number(burst)) && Number(burst) > 0 && Number(burst) <= 100000)) {
+      return res.status(400).send('Invalid burst (positive integer)');
+    }
+    if (!['in', 'out', 'both'].includes(String(direction))) {
+      return res.status(400).send('Invalid direction (in|out|both)');
+    }
 
     const rules = [];
     if (direction === 'in' || direction === 'both') {

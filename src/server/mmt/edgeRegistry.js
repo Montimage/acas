@@ -116,6 +116,11 @@ function updateEdge(id, patch = {}) {
   for (const key of allowed) {
     if (key in patch) edges[idx][key] = patch[key];
   }
+  // Coerce types so untrusted patch values can't inject (port reaches the edge
+  // shell command during provisioning; tls flags reach the TLS client).
+  if ('port' in patch) edges[idx].port = Number(patch.port) || 8443;
+  if ('tls' in patch) edges[idx].tls = Boolean(patch.tls);
+  if ('insecureTLS' in patch) edges[idx].insecureTLS = Boolean(patch.insecureTLS);
   if ('ssh' in patch) edges[idx].ssh = normalizeSsh(patch.ssh);
   writeAll(edges);
   return publicView(edges[idx]);

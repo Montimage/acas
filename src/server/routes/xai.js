@@ -1,6 +1,10 @@
 const express = require('express');
+const path = require('path');
 
 const router = express.Router();
+
+// Strip any directory components / traversal from a request param used in a path.
+const seg = (s) => path.basename(String(s || ''));
 
 const {
   getXAIStatus,
@@ -112,7 +116,7 @@ router.post('/shap', async (req, res) => {
 // Get instance-level predicted probabilities (flow-based LIME)
 router.get('/lime/instance-probs/:modelId', (req, res) => {
   const { modelId } = req.params;
-  const modelDir = modelId.replace('.h5', '');
+  const modelDir = seg(modelId).replace('.h5', '');
   const probsFile = `${XAI_PATH}${modelDir}/instance_probs.json`;
   isFileExist(probsFile, (ret) => {
     if (!ret) {
@@ -200,7 +204,7 @@ router.post('/lime', async (req, res) => {
  */
 router.get('/explanations/:modelId', (req, res, next) => {
   const { modelId } = req.params;
-  const xaiFilePath = `${XAI_PATH}${modelId.replace('.h5', '')}`;
+  const xaiFilePath = `${XAI_PATH}${seg(modelId).replace('.h5', '')}`;
 
   listFiles(xaiFilePath, '.json', (files) => {
     res.send({
@@ -231,7 +235,7 @@ router.get('/shap/explanations/:modelId/:labelId', (req, res, next) => {
     return res.status(400).send(`Invalid labelId: ${labelId}`);
   }
 
-  const xaiFilePath = `${XAI_PATH}${modelId.replace('.h5', '')}`;
+  const xaiFilePath = `${XAI_PATH}${seg(modelId).replace('.h5', '')}`;
   const shapValuesFile = `${xaiFilePath}/${label}_importance_values.json`;
   //console.log(shapValuesFile);
 
@@ -266,7 +270,7 @@ router.get('/lime/explanations/:modelId/:labelId', (req, res, next) => {
     return res.status(400).send(`Invalid labelId: ${labelId}`);
   }
 
-  const xaiFilePath = `${XAI_PATH}${modelId.replace('.h5', '')}`;
+  const xaiFilePath = `${XAI_PATH}${seg(modelId).replace('.h5', '')}`;
   const limeExpsFile = `${xaiFilePath}/${label}_lime_explanations.json`;
   //console.log(limeExpsFile);
 
@@ -301,7 +305,7 @@ router.get('/lime/importance-values/:modelId/:labelId', (req, res, next) => {
     return res.status(400).send(`Invalid labelId: ${labelId}`);
   }
 
-  const xaiFilePath = `${XAI_PATH}${modelId.replace('.h5', '')}`;
+  const xaiFilePath = `${XAI_PATH}${seg(modelId).replace('.h5', '')}`;
   const limeValuesFile = `${xaiFilePath}/${label}_lime_values.json`;
   //console.log(limeValuesFile);
 

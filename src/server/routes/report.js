@@ -12,6 +12,9 @@ const {
   isFileExist,
 } = require('../utils/file-utils');
 
+// Strip any directory components / traversal from a request param used in a path.
+const seg = (s) => path.basename(String(s || ''));
+
 router.get('/', (req, res) => {
   listFiles(REPORT_PATH, 'report-', (files) => {
     res.send({
@@ -43,7 +46,7 @@ router.get('/:reportId', (req, res) => {
   const {
     reportId,
   } = req.params;
-  listFiles(`${REPORT_PATH}${reportId}`, '.csv', (files) => {
+  listFiles(`${REPORT_PATH}${seg(reportId)}`, '.csv', (files) => {
     res.send({
       csvFiles: files,
     });
@@ -55,7 +58,7 @@ router.get('/:reportId/:fileName/download', (req, res) => {
     fileName,
     reportId,
   } = req.params;
-  const reportFilePath = `${REPORT_PATH}${reportId}/${fileName}`;
+  const reportFilePath = `${REPORT_PATH}${seg(reportId)}/${seg(fileName)}`;
   isFileExist(reportFilePath, (ret) => {
     if (!ret) {
       res.status(401).send(`The report file ${reportId}/${fileName} does not exist`);
@@ -70,7 +73,7 @@ router.get('/:reportId/:fileName', (req, res) => {
     fileName,
     reportId,
   } = req.params;
-  readTextFile(`${REPORT_PATH}${reportId}/${fileName}`, (err, content) => {
+  readTextFile(`${REPORT_PATH}${seg(reportId)}/${seg(fileName)}`, (err, content) => {
     if (err) {
       res.status(401).send({
         error: 'Something went wrong!',

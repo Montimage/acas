@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 const express = require('express');
+const path = require('path');
 
 const router = express.Router();
 const {
@@ -8,6 +9,9 @@ const {
 const {
   listFiles, readTextFile, isFileExist,
 } = require('../utils/file-utils');
+
+// Strip any directory components / traversal from a request param used in a path.
+const seg = (s) => path.basename(String(s || ''));
 
 /** Download a prediction .csv file */
 router.get('/:predictionId/download', (req, res, next) => {
@@ -29,7 +33,7 @@ router.get('/:predictionId/download', (req, res, next) => {
     });
   }
 
-  const predictionFilePath = `${PREDICTION_PATH}${predictionId}/predictions.csv`;
+  const predictionFilePath = `${PREDICTION_PATH}${seg(predictionId)}/predictions.csv`;
   isFileExist(predictionFilePath, (ret) => {
     if (!ret) {
       if (isOnlineMode) {
@@ -68,7 +72,7 @@ router.get('/:predictionId/attack', (req, res, next) => {
     return res.status(202).send('Prediction is still in progress, attacks file not yet available');
   }
 
-  const predictionFilePath = `${PREDICTION_PATH}${predictionId}/attacks.csv`;
+  const predictionFilePath = `${PREDICTION_PATH}${seg(predictionId)}/attacks.csv`;
   isFileExist(predictionFilePath, (ret) => {
     if (!ret) {
       // Prediction completed but no attacks file (all flows were normal)
@@ -105,7 +109,7 @@ router.get('/:predictionId/attacks', (req, res, next) => {
     });
   }
 
-  const predictionFilePath = `${PREDICTION_PATH}${predictionId}/attacks.csv`;
+  const predictionFilePath = `${PREDICTION_PATH}${seg(predictionId)}/attacks.csv`;
   isFileExist(predictionFilePath, (ret) => {
     if (!ret) {
       // No attacks file - return empty with appropriate status
@@ -160,7 +164,7 @@ router.get('/:predictionId/normal', (req, res, next) => {
     });
   }
 
-  const predictionFilePath = `${PREDICTION_PATH}${predictionId}/normals.csv`;
+  const predictionFilePath = `${PREDICTION_PATH}${seg(predictionId)}/normals.csv`;
   isFileExist(predictionFilePath, (ret) => {
     if (!ret) {
       if (isOnlineMode) {
@@ -201,7 +205,7 @@ router.get('/:predictionId/normals', (req, res, next) => {
     });
   }
 
-  const predictionFilePath = `${PREDICTION_PATH}${predictionId}/normals.csv`;
+  const predictionFilePath = `${PREDICTION_PATH}${seg(predictionId)}/normals.csv`;
   isFileExist(predictionFilePath, (ret) => {
     if (!ret) {
       return res.status(200).json({
@@ -237,7 +241,7 @@ router.get('/:predictionId/normals', (req, res, next) => {
 //  */
 // router.get('/:predictionId/all', (req, res, next) => {
 //   const { predictionId } = req.params;
-//   readTextFile(`${PREDICTION_PATH}${predictionId}/predictions.csv`, (err, content) => {
+//   readTextFile(`${PREDICTION_PATH}${seg(predictionId)}/predictions.csv`, (err, content) => {
 //     if (err) {
 //       res.status(401).send({ error: 'Something went wrong!' });
 //     } else {
