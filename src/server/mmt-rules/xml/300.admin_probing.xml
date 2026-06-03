@@ -1,0 +1,12 @@
+<beginning>
+<!-- Property 300: probing of well-known admin/login interfaces (forced browsing). -->
+<property value="THEN" delay_units="ms" delay_min="0" delay_max="0" property_id="300" type_property="ATTACK"
+     description="Admin interface probing (sensitive path enumeration)">
+   <event event_id="1" value="COMPUTE"
+       description="Context: an HTTP request"
+       boolean_expression="(http.method != '')"/>
+   <event event_id="2" value="COMPUTE"
+       description="Trigger: request to a well-known admin/login path"
+       boolean_expression="((#strstr(http.uri,'/wp-admin')!=0) || (#strstr(http.uri,'/wp-login.php')!=0) || (#strstr(http.uri,'/wp-json')!=0) || (#strstr(http.uri,'/phpmyadmin')!=0) || (#strstr(http.uri,'/phpMyAdmin')!=0) || (#strstr(http.uri,'/administrator')!=0) || (#strstr(http.uri,'/admin')!=0) || (#strstr(http.uri,'/user/login')!=0) || (#strstr(http.uri,'/drupal')!=0) || (#strstr(http.uri,'/pma')!=0))"/>
+ </property>
+</beginning>

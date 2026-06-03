@@ -152,8 +152,8 @@ function ruleVerdictsFromFile(file) {
  */
 const NO_LIMIT = 10_000_000; // per-file read cap (files are per-interval, far smaller)
 
-function collectSessionAlerts(dir, limit = 500) {
-  if (!dir || !fs.existsSync(dir)) return { alerts: [], files: [] };
+function collectSessionAlerts(dir, limit = 500, raw = false) {
+  if (!dir || !fs.existsSync(dir)) return { alerts: [], files: [], total: 0 };
   const all = fs.readdirSync(dir).filter(f => f.endsWith('.csv'));
   // Prefer sec-*.csv (alert files); fall back to any .csv for legacy dirs.
   let secFiles = all.filter(f => f.startsWith('sec-'));
@@ -164,8 +164,10 @@ function collectSessionAlerts(dir, limit = 500) {
 
   const combined = [];
   for (const { full } of ordered) combined.push(...parseSecurityCsv(full, NO_LIMIT));
-  const deduped = dedupeAlerts(combined);
-  return { alerts: deduped.slice(-limit), files: ordered.map(o => o.f) };
+  const files = ordered.map(o => o.f);
+  // raw=true → every alert (most-recent `limit`); default → aggregated signatures.
+  if (raw) return { alerts: combined.slice(-limit), files, total: combined.length };
+  return { alerts: aggregateAlerts(combined), files, total: combined.length };
 }
 
 function parseSecurityCsvLine(line) {
@@ -217,6 +219,10 @@ function parseSecurityCsvLine(line) {
   const attrMap = new Map(attrs.map(x => [x.k, x.v]));
   const srcIp = attrMap.get('ip.src') || null;
   const dstIp = attrMap.get('ip.dst') || null;
+  // A distinguishing "target" for HTTP/app rules (e.g. the probed path or the
+  // response code) so dedup keeps distinct targets separate — important on
+  // loopback where src/dst IPs are absent.
+  const target = attrMap.get('http.uri') || attrMap.get('http.response') || null;
 
   return {
     probeId: Number(sev),
@@ -227,6 +233,7 @@ function parseSecurityCsvLine(line) {
     description: (desc || '').replace(/"/g, ''),
     srcIp,
     dstIp,
+    target,
     raw: line,
     details,
   };
@@ -267,24 +274,54 @@ function parseRuleVerdictsFromText(text) {
   }
 }
 
-function dedupeAlerts(list) {
+const TARGET_CAP = 20; // max distinct targets listed per aggregated alert
+
+/**
+ * Aggregate raw alerts into one entry per threat signature.
+ *
+ * Key = (code, category, srcIp, dstIp) — "who did what to whom". The target
+ * (path / response code / port) is deliberately NOT in the key, because for
+ * volumetric attacks (scans, brute force) it would explode into thousands of
+ * rows; instead each aggregate carries `count`, `firstSeen`/`lastSeen`, and a
+ * capped list of distinct `targets`. This keeps the volume + breadth signal
+ * without flooding. Raw events remain on disk for drill-down (`?raw=true`).
+ */
+function aggregateAlerts(list) {
   try {
-    const seen = new Set();
-    const out = [];
+    const groups = new Map();
     for (const a of list || []) {
       const code = a && typeof a.code !== 'undefined' ? String(a.code) : '';
       const category = String((a && a.category) || '').trim().toLowerCase();
-      const desc = String((a && a.description) || '').trim().toLowerCase();
       const src = String((a && a.srcIp) || '').trim().toLowerCase();
       const dst = String((a && a.dstIp) || '').trim().toLowerCase();
-      // Group by stable identity ignoring timestamp and probe
-      const key = [code, category, desc, src, dst].join('|');
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(a);
+      const key = [code, category, src, dst].join('|');
+      let g = groups.get(key);
+      if (!g) {
+        // Seed from the first alert (keeps a representative raw/details sample).
+        g = {
+          probeId: a.probeId, code: a.code, status: a.status, category: a.category,
+          description: a.description, srcIp: a.srcIp, dstIp: a.dstIp,
+          count: 0, firstSeen: a.timestamp, lastSeen: a.timestamp,
+          targets: [], distinctTargets: 0, raw: a.raw, details: a.details,
+          _seenTargets: new Set(),
+        };
+        groups.set(key, g);
+      }
+      g.count += 1;
+      if (typeof a.timestamp === 'number') {
+        if (g.firstSeen == null || a.timestamp < g.firstSeen) g.firstSeen = a.timestamp;
+        if (g.lastSeen == null || a.timestamp > g.lastSeen) g.lastSeen = a.timestamp;
+      }
+      if (a.target && !g._seenTargets.has(a.target)) {
+        g._seenTargets.add(a.target);
+        if (g.targets.length < TARGET_CAP) g.targets.push(a.target);
       }
     }
-    return out;
+    return [...groups.values()].map((g) => {
+      g.distinctTargets = g._seenTargets.size;
+      delete g._seenTargets;
+      return g;
+    });
   } catch (_) {
     return Array.isArray(list) ? list : [];
   }
@@ -346,9 +383,10 @@ router.get('/rule-based/alerts', async (req, res) => {
     }
 
     // Aggregate across all of the session's sec-*.csv files (covers the whole
-    // session, not just the latest rotated file).
-    const { alerts, files } = collectSessionAlerts(outputDir, limit);
-    res.send({ ok: true, files, count: alerts.length, alerts });
+    // session). ?raw=true returns every alert instead of aggregated signatures.
+    const raw = req.query.raw === 'true';
+    const { alerts, files, total } = collectSessionAlerts(outputDir, limit, raw);
+    res.send({ ok: true, files, count: alerts.length, total, aggregated: !raw, alerts });
   } catch (e) {
     res.status(500).send(e.message || 'Failed to read alerts');
   }
@@ -732,7 +770,7 @@ router.post('/rule-based/offline', async (req, res) => {
           // Parse and return alerts
           const file = status.result?.outputFile;
           const alerts = file ? parseSecurityCsv(file, 2000) : [];
-          const uniqueAlerts = dedupeAlerts(alerts);
+          const uniqueAlerts = aggregateAlerts(alerts);
 
           return res.send({
             ok: true,
@@ -824,7 +862,7 @@ router.post('/rule-based/offline', async (req, res) => {
       }
       const file = findLatestSecurityCsv(outDir);
       const alerts = parseSecurityCsv(file, 2000);
-      const uniqueAlerts = dedupeAlerts(alerts);
+      const uniqueAlerts = aggregateAlerts(alerts);
       const ruleVerdicts = parseRuleVerdictsFromText(`${stdout}\n${stderr}`);
 
       sessionManager.updateSession('attacks', sessionId, {

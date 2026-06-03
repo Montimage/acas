@@ -2305,24 +2305,59 @@
       "get" : {
         "tags" : [ "security" ],
         "summary" : "Get rule-based alerts",
-        "description" : "Get security alerts from rule-based detection. Pass the sessionId returned by /online/start (works for both local and remote-edge sessions; remote alerts are pulled from the edge into the session's report dir).",
+        "description" : "Get security alerts from rule-based detection. By default alerts are AGGREGATED by signature (code + category + srcIp + dstIp): each entry includes count, firstSeen, lastSeen, and a capped list of distinct targets (probed paths / response codes) + distinctTargets. Use raw=true to get every individual alert instead.",
         "operationId" : "getRuleBasedAlerts",
         "parameters" : [ {
           "name" : "sessionId",
           "in" : "query",
-          "schema" : {
-            "type" : "string"
-          }
+          "description" : "Session id from /online/start. Omit for the legacy local session.",
+          "schema" : { "type" : "string" }
         }, {
           "name" : "limit",
           "in" : "query",
-          "schema" : {
-            "type" : "number"
-          }
+          "description" : "Max alerts to consider (most recent). Default 500.",
+          "schema" : { "type" : "number" }
+        }, {
+          "name" : "raw",
+          "in" : "query",
+          "description" : "If true, return every individual alert instead of aggregated signatures.",
+          "schema" : { "type" : "boolean" }
         } ],
         "responses" : {
           "200" : {
-            "description" : "Successful operation"
+            "description" : "Alerts. { ok, files, total (raw count), aggregated, count, alerts:[...] }. Aggregated alerts carry count, firstSeen, lastSeen, targets[], distinctTargets; each also has code, category, description, srcIp, dstIp, target.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "ok" : { "type" : "boolean" },
+                    "total" : { "type" : "number", "description" : "Total raw alerts in the session." },
+                    "count" : { "type" : "number", "description" : "Number of entries returned." },
+                    "aggregated" : { "type" : "boolean" },
+                    "files" : { "type" : "array", "items" : { "type" : "string" } },
+                    "alerts" : {
+                      "type" : "array",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "code" : { "type" : "integer" },
+                          "category" : { "type" : "string" },
+                          "description" : { "type" : "string" },
+                          "srcIp" : { "type" : "string", "nullable" : true },
+                          "dstIp" : { "type" : "string", "nullable" : true },
+                          "count" : { "type" : "integer", "description" : "Occurrences (aggregated mode)." },
+                          "firstSeen" : { "type" : "number" },
+                          "lastSeen" : { "type" : "number" },
+                          "targets" : { "type" : "array", "items" : { "type" : "string" }, "description" : "Distinct targets (paths / response codes), capped at 20." },
+                          "distinctTargets" : { "type" : "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
