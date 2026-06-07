@@ -4,7 +4,7 @@
      description="Admin interface probing (sensitive path enumeration)">
    <event event_id="1" value="COMPUTE"
        description="Context: an HTTP request"
-       boolean_expression="(http.method != '')"/>
+       boolean_expression="((http.method != '') &amp;&amp; ((ip.src == ip.dst) || (ip.src != ip.dst)))"/>
    <event event_id="2" value="COMPUTE"
        description="Trigger: request to a well-known admin/login path"
        boolean_expression="((#strstr(http.uri,'/wp-admin')!=0) || (#strstr(http.uri,'/wp-login.php')!=0) || (#strstr(http.uri,'/wp-json')!=0) || (#strstr(http.uri,'/phpmyadmin')!=0) || (#strstr(http.uri,'/phpMyAdmin')!=0) || (#strstr(http.uri,'/administrator')!=0) || (#strstr(http.uri,'/admin')!=0) || (#strstr(http.uri,'/user/login')!=0) || (#strstr(http.uri,'/drupal')!=0) || (#strstr(http.uri,'/pma')!=0))"/>

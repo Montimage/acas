@@ -4,7 +4,7 @@
      description="Unauthorized/forbidden API access (rejected by server)">
    <event event_id="1" value="COMPUTE"
        description="Context: an HTTP response"
-       boolean_expression="(http.response != '')"/>
+       boolean_expression="((http.response != '') &amp;&amp; ((ip.src == ip.dst) || (ip.src != ip.dst)))"/>
    <event event_id="2" value="COMPUTE"
        description="Trigger: auth-failure status code"
        boolean_expression="((#strstr(http.response,'401')!=0) || (#strstr(http.response,'403')!=0))"/>

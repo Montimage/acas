@@ -4,7 +4,7 @@
      description="Malformed or injection-suspicious request parameter">
    <event event_id="1" value="COMPUTE"
        description="Context: an HTTP request carrying a query string"
-       boolean_expression="((http.method != '') &amp;&amp; (#strstr(http.uri,'?') != 0))"/>
+       boolean_expression="((http.method != '') &amp;&amp; ((#strstr(http.uri,'?') != 0) &amp;&amp; ((ip.src == ip.dst) || (ip.src != ip.dst))))"/>
    <event event_id="2" value="COMPUTE"
        description="Trigger: suspicious / encoded token in the parameters"
        boolean_expression="((#strstr(http.uri,'%22')!=0) || (#strstr(http.uri,'%27')!=0) || (#strstr(http.uri,'%3C')!=0) || (#strstr(http.uri,'%3E')!=0) || (#strstr(http.uri,'%00')!=0) || (#strstr(http.uri,'../')!=0))"/>
